@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
 import {
   Card,
@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   LineChart,
   BarChart,
@@ -20,10 +22,13 @@ import {
   ShoppingBag,
   Camera,
   Share2,
+  FileText,
+  DollarSign,
+  User,
+  Settings,
+  Users2,
+  Package,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
 
 
 
@@ -66,26 +71,25 @@ function RoleImpersonationBanner() {
 export default function InfluencerDashboard() {
   const { user, userRole, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
+
   const [statistics, setStatistics] = useState({
     totalEarnings: "$12,538",
     followers: "128.4K",
     engagementRate: "4.7%",
     productsSold: "843",
-    avgOrderValue: "$78.24",
-    clickThroughRate: "3.2%",
-    pendingMessages: "8",
   });
 
-  // Check for proper role authorization
-  useEffect(() => {
+
+
+   useEffect(() => {
     if (!isLoading) {
       if (!user) {
         router.push("/signin");
         return;
       }
 
-      // Check for temporary role impersonation by admins
       const getCookieValue = (name: string) => {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
@@ -98,7 +102,6 @@ export default function InfluencerDashboard() {
       const isAdminImpersonating =
         tempRole === "INFLUENCER" && originalRole === "ADMIN";
 
-      // Allow access if the user is actually an influencer OR an admin impersonating an influencer
       if (
         !userRole ||
         (userRole.toUpperCase() !== "INFLUENCER" && !isAdminImpersonating)
@@ -119,9 +122,48 @@ export default function InfluencerDashboard() {
     );
   }
 
+
+  // ------------------ ✨ Navigation Links ✨ ------------------
+  const navLinks = [
+    { name: "Overview", href: "/dashboard/influencer", icon: LineChart },
+    { name: "Analytics", href: "/dashboard/influencer/analytics", icon: BarChart },
+    { name: "Content", href: "/dashboard/influencer/content", icon: Camera },
+    { name: "Customers", href: "/dashboard/influencer/customers", icon: Users2 },
+    { name: "Earnings", href: "/dashboard/influencer/earnings", icon: DollarSign },
+    { name: "Products", href: "/dashboard/influencer/products", icon: Package },
+    { name: "Profile", href: "/dashboard/influencer/profile", icon: User },
+    { name: "Settings", href: "/dashboard/influencer/settings", icon: Settings },
+  ];
+
+
+
   return (
     <div>
       <RoleImpersonationBanner/>
+
+
+ {/* 🌟 Influencer Navigation Bar */}
+      <div className="mb-6 overflow-x-auto">
+        <div className="flex gap-2 pb-2 border-b border-gray-200 dark:border-gray-800">
+          {navLinks.map(({ name, href, icon: Icon }) => (
+            <Link key={name} href={href}>
+              <Button
+                variant={pathname === href ? "default" : "ghost"}
+                className={`flex items-center gap-2 ${
+                  pathname === href
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                    : "text-gray-600 dark:text-gray-300 hover:text-indigo-600"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {name}
+              </Button>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ----------------- Existing Dashboard Content ----------------- */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Influencer Dashboard</h1>
@@ -130,16 +172,23 @@ export default function InfluencerDashboard() {
           </p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <Button>
-            <Camera className="mr-2 h-4 w-4" />
-            Create Content
-          </Button>
-          <Button variant="outline">
-            <Share2 className="mr-2 h-4 w-4" />
-            Share Profile
-          </Button>
+          <Link href="/dashboard/influencer/content">
+            <Button>
+              <Camera className="mr-2 h-4 w-4" />
+              Create Content
+            </Button>
+          </Link>
+          <Link href="/dashboard/influencer/profile">
+            <Button variant="outline">
+              <Share2 className="mr-2 h-4 w-4" />
+              Share Profile
+            </Button>
+          </Link>
         </div>
       </div>
+
+
+
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

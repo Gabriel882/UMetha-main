@@ -280,14 +280,16 @@ export default function AdminDashboard() {
           </CardContent>
           <CardFooter className="text-indigo-100">
             <div className="flex gap-3">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="bg-white text-indigo-600 hover:bg-indigo-50"
-              >
-                <FileBarChart className="mr-2 h-4 w-4" />
-                View Reports
-              </Button>
+           <Link href="/dashboard/admin/reports">
+      <Button
+        size="sm"
+        variant="secondary"
+        className="bg-white text-indigo-600 hover:bg-indigo-50"
+      >
+        <FileBarChart className="mr-2 h-4 w-4" />
+        View Reports
+      </Button>
+    </Link>
              <Button
   asChild
   size="sm"
