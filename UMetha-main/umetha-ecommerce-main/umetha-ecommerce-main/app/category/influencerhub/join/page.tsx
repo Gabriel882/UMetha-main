@@ -30,11 +30,24 @@ import ParallaxCard from "@/components/ui/parallax-card";
 import { SmoothScroll } from "@/components/ui/smooth-scroll";
 import { HoverCard } from "@/components/ui/hover-card";
 import { useSocialValidation } from "@/hooks/use-social-validation";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+
+
 
 export default function JoinInfluencerHub() {
   const [step, setStep] = useState(0); // 0 for landing view
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+  const [showSuccess, setShowSuccess] = useState(false);
+const [isSubmitting, setIsSubmitting] = useState(false);
+
   
   // Social media validation hook
   const {
@@ -180,17 +193,44 @@ export default function JoinInfluencerHub() {
   ];
 
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    instagram: "",
-    youtube: "",
-    twitter: "",
-    tiktok: "",
-    category: "",
-    followers: "",
-    story: "",
-  });
+  firstName: "",
+  lastName: "",
+  email: "",
+  password: "",
+  instagram: "",
+  youtube: "",
+  twitter: "",
+  tiktok: "",
+  category: "",
+  followers: "",
+  story: "",
+});
+
+const extractUsername = (raw: string) => {
+  if (!raw) return "";
+  let v = raw.trim();
+
+  // If a full URL, extract last non-empty path segment
+  try {
+    if (v.startsWith("http")) {
+      const url = new URL(v);
+      // instagram/youtube/tiktok/twitter path can be like /user/ or /@user
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length) {
+        v = parts[parts.length - 1];
+      } else {
+        v = url.hostname.replace("www.", "");
+      }
+    }
+  } catch (e) {
+    // not a valid URL, continue
+  }
+
+  // Remove leading @ and trailing slashes or query params
+  v = v.replace(/^@+/, "").split(/[?#/]/)[0].trim();
+
+  return v;
+};
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -201,43 +241,55 @@ export default function JoinInfluencerHub() {
   };
 
   // Debounced validation for social media usernames
-  const [validationTimeouts, setValidationTimeouts] = useState<Record<string, NodeJS.Timeout>>({});
+  const [validationTimeouts, setValidationTimeouts] = useState<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const handleSocialMediaChange = useCallback(async (platform: string, value: string) => {
-    // Clear existing timeout
-    if (validationTimeouts[platform]) {
-      clearTimeout(validationTimeouts[platform]);
-    }
 
-    // Update form data immediately
-    setFormData((prev) => ({
-      ...prev,
-      [platform]: value,
-    }));
+  const handleSocialMediaChange = useCallback((platform: string, value: string, validateImmediately = false) => {
+  // Update form data immediately (keeps full text so users can paste URLs)
+  setFormData((prev) => ({
+    ...prev,
+    [platform]: value,
+  }));
 
-    // Clear validation if input is empty
-    if (!value.trim()) {
-      clearValidation(platform);
-      return;
-    }
+  // Clear any previous timeout for this platform
+  if (validationTimeouts[platform]) {
+    clearTimeout(validationTimeouts[platform]);
+  }
 
-    // Basic username validation before API call
-    const cleanValue = value.replace('@', '').trim();
-    if (cleanValue.length < 2) {
-      // Don't validate usernames that are too short
-      return;
-    }
+  const cleanValue = extractUsername(value);
 
-    // Set new timeout for validation
-    const timeout = setTimeout(async () => {
-      await validateUsername(platform, cleanValue);
-    }, 1000); // 1 second delay
+  // If empty, clear validation state for the platform
+  if (!cleanValue) {
+    clearValidation(platform);
+    return;
+  }
 
-    setValidationTimeouts(prev => ({
-      ...prev,
-      [platform]: timeout
-    }));
-  }, [validateUsername, clearValidation, validationTimeouts]);
+  // If username is too short, do not call the API but show "too short" client-side guidance
+  if (cleanValue.length < 2 && !validateImmediately) {
+    // schedule a lightweight timeout to avoid too-frequent UI flicker (still no API call)
+    const t = setTimeout(() => {
+      // nothing to validate; keep local state
+    }, 500);
+    setValidationTimeouts((prev) => ({ ...prev, [platform]: t }));
+    return;
+  }
+
+  // If user requested immediate validation (onBlur) validate now
+  if (validateImmediately) {
+    validateUsername(platform, cleanValue);
+    return;
+  }
+
+  // Otherwise debounce the API call (1s)
+  const timeout = setTimeout(() => {
+    validateUsername(platform, cleanValue);
+  }, 1000);
+
+  setValidationTimeouts((prev) => ({
+    ...prev,
+    [platform]: timeout,
+  }));
+}, [validateUsername, clearValidation, validationTimeouts]);
 
   // Update total followers when validation states change
   useEffect(() => {
@@ -275,91 +327,177 @@ export default function JoinInfluencerHub() {
     });
   }, [formData, getValidationState]);
 
-  const handleSubmit = async () => {
-    if (!hasValidSocialMedia()) {
-      return; // Don't submit if social media validation fails
-    }
-    setStep(3);
-  };
+const router = useRouter();
+
+const handleSubmit = async (e?: React.FormEvent) => {
+  if (e) e.preventDefault();
+
+  if (!hasValidSocialMedia()) {
+    alert("Please enter at least one valid social media account.");
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    // 1️⃣ Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: `${formData.firstName} ${formData.lastName}`,
+          role: "INFLUENCER",
+        },
+      },
+    });
+
+    if (authError) throw authError;
+
+    const authUserId = authData?.user?.id;
+
+    // 2️⃣ Insert influencer application
+    const { error: insertError } = await supabase.from("influencer_applications").insert([
+      {
+        auth_user_id: authUserId,
+        full_name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        social_links: {
+          instagram: formData.instagram,
+          tiktok: formData.tiktok,
+          youtube: formData.youtube,
+          twitter: formData.twitter,
+        },
+        total_followers: parseInt(formData.followers || "0"),
+        category: formData.category,
+        story: formData.story,
+      },
+    ]);
+
+    if (insertError) throw insertError;
+
+    // 3️⃣ Show success popup
+    setShowSuccess(true);
+
+    // 4️⃣ Redirect after short delay
+    setTimeout(() => {
+      router.push("/dashboard-signin?role=influencer");
+    }, 2500);
+  } catch (error: any) {
+    console.error("Error submitting influencer application:", error.message);
+    alert("An error occurred while submitting your application. Please try again.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+
 
   // Social Media Input Component with validation
-  const SocialMediaInput = ({ 
-    platform, 
-    icon: Icon, 
-    placeholder, 
-    value, 
-    onChange 
-  }: {
-    platform: string;
-    icon: React.ComponentType<{ className?: string }>;
-    placeholder: string;
-    value: string;
-    onChange: (platform: string, value: string) => void;
-  }) => {
-    const validationState = getValidationState(platform);
-    const cleanValue = value.replace('@', '').trim();
-    const hasValue = cleanValue.length > 0;
-    const isTooShort = hasValue && cleanValue.length < 2;
-    
-    return (
-      <div className="relative">
-        <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input
-          name={platform}
-          value={value}
-          onChange={(e) => onChange(platform, e.target.value)}
-          placeholder={placeholder}
-          className={`pl-10 pr-10 transition-all focus:ring-2 focus:ring-purple-600 ${
-            validationState.isValid 
-              ? 'border-green-500 focus:border-green-500' 
-              : validationState.error 
-              ? 'border-red-500 focus:border-red-500' 
-              : isTooShort
-              ? 'border-amber-500 focus:border-amber-500'
-              : ''
-          }`}
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {validationState.isValidating && (
-            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-          )}
-          {validationState.isValid && !validationState.isValidating && (
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          )}
-          {validationState.error && !validationState.isValidating && (
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          )}
-          {isTooShort && !validationState.isValidating && !validationState.error && (
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-          )}
-        </div>
-        {validationState.error && (
-          <p className="text-xs text-red-500 mt-1">
-            {validationState.error.includes('not found') || validationState.error.includes('does not exist')
+const SocialMediaInput = ({
+  platform,
+  icon: Icon,
+  placeholder,
+  value,
+  onChange,
+}: {
+  platform: string;
+  icon: React.ComponentType<{ className?: string }>;
+  placeholder: string;
+  value: string;
+  onChange: (platform: string, value: string, validateImmediately?: boolean) => void;
+}) => {
+  const validationState = getValidationState(platform);
+  const rawValue = value ?? "";
+  const cleanValue = extractUsername(rawValue);
+  const hasValue = rawValue.trim().length > 0;
+  const isTooShort = hasValue && cleanValue.length > 0 && cleanValue.length < 2;
+
+  // Build profile link fallback by platform
+  const platformBaseUrlMap: Record<string, string> = {
+    instagram: "https://instagram.com/",
+    twitter: "https://twitter.com/",
+    youtube: "https://www.youtube.com/",
+    tiktok: "https://www.tiktok.com/@",
+  };
+  const profileUrl = cleanValue ? (platformBaseUrlMap[platform] || "") + cleanValue : "";
+
+  return (
+    <div className="relative">
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+      <Input
+        name={platform}
+        value={value}
+        onChange={(e) => onChange(platform, e.target.value)}
+        onBlur={() => onChange(platform, rawValue, true)} // immediate validation on blur
+        placeholder={placeholder}
+        className={`pl-10 pr-10 transition-all focus:ring-2 focus:ring-purple-600 ${
+          validationState.isValid
+            ? "border-green-500 focus:border-green-500"
+            : validationState.error
+            ? "border-red-500 focus:border-red-500"
+            : isTooShort
+            ? "border-amber-500 focus:border-amber-500"
+            : ""
+        }`}
+      />
+
+      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+        {validationState.isValidating && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+        {!validationState.isValidating && validationState.isValid && <CheckCircle className="h-4 w-4 text-green-500" />}
+        {!validationState.isValidating && validationState.error && <AlertCircle className="h-4 w-4 text-red-500" />}
+        {!validationState.isValidating && isTooShort && <AlertCircle className="h-4 w-4 text-amber-500" />}
+      </div>
+
+      {/* Validation messages */}
+      <div className="mt-1">
+        {/* Too short client-side hint */}
+        {isTooShort && !validationState.isValid && !validationState.isValidating && (
+          <p className="text-xs text-amber-600">Username must be at least 2 characters long</p>
+        )}
+
+        {/* API error message */}
+        {validationState.error && !validationState.isValidating && (
+          <p className="text-xs text-red-500">
+            {validationState.error.includes("not found") || validationState.error.includes("does not exist")
               ? `@${cleanValue} does not exist on ${platform.charAt(0).toUpperCase() + platform.slice(1)}`
-              : validationState.error
-            }
+              : validationState.error}
           </p>
         )}
-        {isTooShort && !validationState.error && (
-          <p className="text-xs text-amber-600 mt-1">
-            Username must be at least 2 characters long
-          </p>
-        )}
+
+        {/* Success preview */}
         {validationState.isValid && validationState.data && (
-          <p className="text-xs text-green-600 mt-1">
-            {validationState.data.followers 
-              ? `${formatFollowerCount(validationState.data.followers)} followers`
-              : validationState.data.subscribers 
-              ? `${formatFollowerCount(validationState.data.subscribers)} subscribers`
-              : 'Valid account'
-            }
-            {validationState.data.verified && ' • Verified'}
-          </p>
+          <div className="mt-2 flex items-center gap-3">
+            {/* optional avatar */}
+            {validationState.data.avatar && (
+              // Using plain img because next/image may require static domains config
+              <img src={validationState.data.avatar} alt={cleanValue} className="h-8 w-8 rounded-full object-cover" />
+            )}
+
+            <div className="text-xs">
+              <div className="flex items-center gap-2">
+                <a href={profileUrl} target="_blank" rel="noreferrer" className="font-medium text-green-600 hover:underline">
+                  @{cleanValue}
+                </a>
+                {validationState.data.verified && (
+                  <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">Verified</span>
+                )}
+              </div>
+
+              <div className="text-xs text-gray-600">
+                {validationState.data.followers
+                  ? `${formatFollowerCount(validationState.data.followers)} followers`
+                  : validationState.data.subscribers
+                  ? `${formatFollowerCount(validationState.data.subscribers)} subscribers`
+                  : "Valid account"}
+              </div>
+            </div>
+          </div>
         )}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   return (
     <MainLayout hideFittingRoom hideRoomVisualizer>
@@ -482,6 +620,7 @@ export default function JoinInfluencerHub() {
                           <span className="text-4xl font-bold text-white">
                             {item.step}
                           </span>
+                          
                         </div>
                       </div>
                       <h3 className="text-xl font-bold mb-2">{item.title}</h3>
@@ -768,44 +907,68 @@ export default function JoinInfluencerHub() {
                         className="transition-all focus:ring-2 focus:ring-purple-600"
                       />
                     </div>
-                    <div className="space-y-4">
-                      <label className="text-sm font-medium">
-                        Social Media Presence
+
+<br></br>
+                       <label className="text-sm font-medium">
+                      Enter a password
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Enter your social media usernames to automatically validate and fetch follower counts
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SocialMediaInput
-                          platform="instagram"
-                          icon={Instagram}
-                          placeholder="Instagram username"
-                          value={formData.instagram}
-                          onChange={handleSocialMediaChange}
-                        />
-                        <SocialMediaInput
-                          platform="youtube"
-                          icon={Youtube}
-                          placeholder="YouTube channel"
-                          value={formData.youtube}
-                          onChange={handleSocialMediaChange}
-                        />
-                        <SocialMediaInput
-                          platform="twitter"
-                          icon={Twitter}
-                          placeholder="Twitter handle"
-                          value={formData.twitter}
-                          onChange={handleSocialMediaChange}
-                        />
-                        <SocialMediaInput
-                          platform="tiktok"
-                          icon={Smartphone}
-                          placeholder="TikTok username"
-                          value={formData.tiktok}
-                          onChange={handleSocialMediaChange}
-                        />
-                      </div>
-                    </div>
+                      <Input
+  type="password"
+  name="password"
+  placeholder="Create a password"
+  value={formData.password}
+  onChange={handleInputChange}
+  required
+  className="mt-3"
+/>
+
+
+                    
+          <div className="space-y-5">
+  <label className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+    Social Media Presence
+  </label>
+  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+    Enter your social media usernames <span className="font-medium text-gray-600 dark:text-gray-300">or full profile URLs</span>.
+    We’ll automatically validate your accounts and fetch follower counts for accuracy.
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+    <SocialMediaInput
+      platform="instagram"
+      icon={Instagram}
+      placeholder="Instagram username or profile URL"
+      value={formData.instagram}
+      onChange={handleSocialMediaChange}
+    />
+    <SocialMediaInput
+      platform="youtube"
+      icon={Youtube}
+      placeholder="YouTube channel name or profile URL"
+      value={formData.youtube}
+      onChange={handleSocialMediaChange}
+    />
+    <SocialMediaInput
+      platform="twitter"
+      icon={Twitter}
+      placeholder="Twitter handle or profile URL"
+      value={formData.twitter}
+      onChange={handleSocialMediaChange}
+    />
+    <SocialMediaInput
+      platform="tiktok"
+      icon={Smartphone}
+      placeholder="TikTok username or profile URL"
+      value={formData.tiktok}
+      onChange={handleSocialMediaChange}
+    />
+  </div>
+
+  <p className="text-xs text-gray-400 italic mt-1">
+    Tip: You only need to fill in the platforms you actively use.
+  </p>
+</div>
+
                     <motion.div className="pt-6" whileHover={{ scale: 1.01 }}>
                       <Button
                         size="lg"
@@ -941,32 +1104,33 @@ export default function JoinInfluencerHub() {
                         <Check className="h-10 w-10 text-white" />
                       </div>
                     </motion.div>
-                    <h2 className="text-2xl font-bold mb-4">
-                      Application Submitted!
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
-                      Thank you for your interest in joining UMetha. We'll
-                      review your application and get back to you within 2-3
-                      business days.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() =>
-                          (window.location.href = "/category/influencerhub")
-                        }
-                      >
-                        Return to Marketplace
-                      </Button>
-                      <Button
-                        size="lg"
-                        className="bg-gradient-to-r from-purple-600 to-indigo-600"
-                        onClick={() => setStep(0)}
-                      >
-                        Close
-                      </Button>
-                    </div>
+
+                  {showSuccess && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      className="bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-xl text-center max-w-sm mx-auto"
+    >
+      <CheckCircle className="w-12 h-12 mx-auto text-green-500 mb-4" />
+      <h2 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-100">
+        Registration Successful 🎉
+      </h2>
+      <p className="text-gray-500 dark:text-gray-400 mb-6">
+        Your influencer profile has been created. Redirecting to sign-in...
+      </p>
+      <Button
+        onClick={() => router.push("/dashboard-signin?role=influencer")}
+        className="bg-purple-600 text-white hover:bg-purple-700"
+      >
+        Continue
+      </Button>
+    </motion.div>
+  </div>
+)}
+
+                   
                   </motion.div>
                 )}
               </div>

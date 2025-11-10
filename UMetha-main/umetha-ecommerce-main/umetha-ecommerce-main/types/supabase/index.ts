@@ -9,6 +9,73 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+
+      
+influencer_products: {
+  Row: {
+    id: string;
+    influencer_id: string;
+    name: string;
+    description: string;
+    price: number;
+    category_id: string | null;
+    stock: number | null;
+    sku: string | null;
+    images: any | null;
+    featured: boolean | null;
+    status: string | null;
+    tags: any | null;
+    weight: number | null;
+    dimensions: any | null;
+    seo_title: string | null;
+    seo_description: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    influencer_id: string;
+    name: string;
+    description: string;
+    price: number;
+    category_id?: string | null;
+    stock?: number | null;
+    sku?: string | null;
+    images?: any | null;
+    featured?: boolean | null;
+    status?: string | null;
+    tags?: any | null;
+    weight?: number | null;
+    dimensions?: any | null;
+    seo_title?: string | null;
+    seo_description?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: {
+    id?: string;
+    influencer_id?: string;
+    name?: string;
+    description?: string;
+    price?: number;
+    category_id?: string | null;
+    stock?: number | null;
+    sku?: string | null;
+    images?: any | null;
+    featured?: boolean | null;
+    status?: string | null;
+    tags?: any | null;
+    weight?: number | null;
+    dimensions?: any | null;
+    seo_title?: string | null;
+    seo_description?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+};
+
+
+      
       users: {
         Row: {
           user_id: number;
@@ -35,6 +102,11 @@ export interface Database {
           date_joined?: string;
         };
       };
+
+
+
+
+
       credentials: {
         Row: {
           credentials_id: number;
@@ -55,7 +127,9 @@ export interface Database {
           last_login?: string;
         };
       };
-      addresses: {
+
+
+     addresses: {
         Row: {
           address_id: number;
           user_id: number;
@@ -280,6 +354,10 @@ export interface Database {
           price_per_item?: number;
           total_price?: number;
         };
+
+ 
+
+
       };
     };
   };

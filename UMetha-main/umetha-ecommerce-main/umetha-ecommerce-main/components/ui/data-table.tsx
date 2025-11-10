@@ -1,6 +1,18 @@
 "use client";
 
 import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getFilteredRowModel,
+  useReactTable,
+  Row,
+  RowSelectionState,
+} from "@tanstack/react-table";
+import { useEffect, useState } from "react";
+
+import {
   Table,
   TableBody,
   TableCell,
@@ -9,24 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-  Row,
-  RowSelectionState,
-} from "@tanstack/react-table";
-import { useEffect, useState } from "react";
-
-interface Column {
-  accessorKey?: string;
-  id?: string;
-  header: string;
-  cell?: ({ row }: { row: any }) => React.ReactNode;
-}
+import { Button } from "@/components/ui/button";
 
 interface DataTableProps<TData> {
-  columns: Column[];
+  columns: ColumnDef<TData>[]; // ✅ Use the correct TanStack column type
   data: TData[];
   onRowSelection?: (selectedRows: string[]) => void;
 }
@@ -41,67 +39,98 @@ export function DataTable<TData>({
   const table = useReactTable({
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
+    state: { rowSelection },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
-    state: {
-      rowSelection,
-    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
+  // ✅ Notify parent whenever selection changes
   useEffect(() => {
     if (onRowSelection) {
-      const selectedRows = table
+      const selectedIds = table
         .getFilteredSelectedRowModel()
         .rows.map((row: Row<TData>) => (row.original as any).id);
-      onRowSelection(selectedRows);
+      onRowSelection(selectedIds);
     }
   }, [rowSelection, onRowSelection, table]);
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow key="header">
-            {onRowSelection && (
-              <TableHead className="w-12">
-                <Checkbox
-                  checked={table.getIsAllRowsSelected()}
-                  indeterminate={table.getIsSomeRowsSelected()}
-                  onCheckedChange={(value) =>
-                    table.toggleAllRowsSelected(!!value)
-                  }
-                />
-              </TableHead>
-            )}
-            {columns.map((column) => (
-              <TableHead key={column.accessorKey || column.id}>
-                {column.header}
-              </TableHead>
+    <div className="space-y-4">
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {onRowSelection && (
-                <TableCell className="w-12">
-                  <Checkbox
-                    checked={row.getIsSelected()}
-                    indeterminate={row.getIsSomeSelected()}
-                    onCheckedChange={(value) => row.toggleSelected(!!value)}
-                  />
+          </TableHeader>
+
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  No results.
                 </TableCell>
-              )}
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* ✅ Pagination Controls */}
+      <div className="flex items-center justify-between px-2">
+        <div className="text-sm text-muted-foreground">
+          Page {table.getState().pagination.pageIndex + 1} of{" "}
+          {table.getPageCount()}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
