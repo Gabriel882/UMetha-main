@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
@@ -26,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import MainLayout from "@/components/main-layout";
+
 import ParallaxCard from "@/components/ui/parallax-card";
 import { SmoothScroll } from "@/components/ui/smooth-scroll";
 import { HoverCard } from "@/components/ui/hover-card";
@@ -39,6 +41,29 @@ const supabase = createClient(
 );
 
 
+// Types for validation state
+interface ValidationData {
+  isValid: boolean;
+  isValidating: boolean;
+  error: string | null;
+  data: {
+    username: string;
+    followers?: number;
+    subscribers?: number;
+    profile_pic?: string;
+    verified?: boolean;
+  } | null;
+}
+
+
+interface SocialMediaInputProps {
+  platform: string;
+  icon: React.ComponentType<{ className?: string }>;
+  placeholder: string;
+  value: string;
+  onChange: (platform: string, value: string) => void;
+}
+
 
 
 export default function JoinInfluencerHub() {
@@ -48,7 +73,7 @@ export default function JoinInfluencerHub() {
   const [showSuccess, setShowSuccess] = useState(false);
 const [isSubmitting, setIsSubmitting] = useState(false);
 
-  
+ 
   // Social media validation hook
   const {
     validateUsername,
@@ -204,33 +229,32 @@ const [isSubmitting, setIsSubmitting] = useState(false);
   category: "",
   followers: "",
   story: "",
+   otp: "",
+   phone: "",
 });
 
 const extractUsername = (raw: string) => {
   if (!raw) return "";
   let v = raw.trim();
 
-  // If a full URL, extract last non-empty path segment
   try {
     if (v.startsWith("http")) {
       const url = new URL(v);
-      // instagram/youtube/tiktok/twitter path can be like /user/ or /@user
       const parts = url.pathname.split("/").filter(Boolean);
-      if (parts.length) {
-        v = parts[parts.length - 1];
-      } else {
-        v = url.hostname.replace("www.", "");
-      }
+      v = parts.length ? parts[parts.length - 1] : url.hostname.replace("www.", "");
     }
-  } catch (e) {
-    // not a valid URL, continue
+  } catch {
+    // not a valid URL
   }
 
-  // Remove leading @ and trailing slashes or query params
   v = v.replace(/^@+/, "").split(/[?#/]/)[0].trim();
-
   return v;
 };
+
+
+
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -329,6 +353,66 @@ const extractUsername = (raw: string) => {
 
 const router = useRouter();
 
+
+const [isOtpSending, setIsOtpSending] = useState(false);
+const [otpSent, setOtpSent] = useState(false);
+const [otpVerified, setOtpVerified] = useState(false);
+const [otpError, setOtpError] = useState("");
+const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+
+
+// Mock send OTP (replace with Twilio/Firebase later)
+const handleSendOtp = async () => {
+  setIsOtpSending(true);
+  setOtpError("");
+
+  try {
+    // You would call your backend API here:
+    // await fetch("/api/send-otp", { method: "POST", body: JSON.stringify({ phone: formData.phone }) });
+
+    // For now, simulate success
+    await new Promise((r) => setTimeout(r, 1500));
+    setOtpSent(true);
+  } catch (err) {
+    console.error(err);
+    setOtpError("Failed to send OTP. Try again later.");
+  } finally {
+    setIsOtpSending(false);
+  }
+};
+
+// Mock verify OTP (replace with Twilio/Firebase later)
+const handleVerifyOtp = async () => {
+  setIsVerifyingOtp(true);
+  setOtpError("");
+
+  try {
+    // You would call your backend API here:
+    // const res = await fetch("/api/verify-otp", { method: "POST", body: JSON.stringify({ phone: formData.phone, otp: formData.otp }) });
+    // const data = await res.json();
+    // if (!data.success) throw new Error("Invalid OTP");
+
+    // For now, mock correct OTP as "123456"
+    if (formData.otp.trim() === "123456") {
+      setOtpVerified(true);
+    } else {
+      throw new Error("Invalid OTP");
+    }
+  } catch (err: any) {
+    setOtpError(err.message || "Verification failed");
+    setOtpVerified(false);
+  } finally {
+    setIsVerifyingOtp(false);
+  }
+};
+
+
+
+
+
+
+
 const handleSubmit = async (e?: React.FormEvent) => {
   if (e) e.preventDefault();
 
@@ -368,7 +452,7 @@ const handleSubmit = async (e?: React.FormEvent) => {
           youtube: formData.youtube,
           twitter: formData.twitter,
         },
-        total_followers: parseInt(formData.followers || "0"),
+        
         category: formData.category,
         story: formData.story,
       },
@@ -394,42 +478,50 @@ const handleSubmit = async (e?: React.FormEvent) => {
 
 
   // Social Media Input Component with validation
-const SocialMediaInput = ({
-  platform,
-  icon: Icon,
-  placeholder,
-  value,
-  onChange,
-}: {
-  platform: string;
-  icon: React.ComponentType<{ className?: string }>;
-  placeholder: string;
-  value: string;
-  onChange: (platform: string, value: string, validateImmediately?: boolean) => void;
-}) => {
-  const validationState = getValidationState(platform);
-  const rawValue = value ?? "";
-  const cleanValue = extractUsername(rawValue);
-  const hasValue = rawValue.trim().length > 0;
-  const isTooShort = hasValue && cleanValue.length > 0 && cleanValue.length < 2;
+  const SocialMediaInput = ({ platform, icon: Icon, placeholder, value, onChange }: SocialMediaInputProps) => {
+  const { validateUsername, getValidationState, formatFollowerCount } = useSocialValidation();
+  const [rawValue, setRawValue] = useState(value ?? "");
 
-  // Build profile link fallback by platform
+  const validationState = getValidationState(platform);
+
+  const cleanValue = rawValue.replace(/^@+/, "").trim();
+  const hasValue = cleanValue.length > 0;
+  const isTooShort = hasValue && cleanValue.length < 2;
+
   const platformBaseUrlMap: Record<string, string> = {
     instagram: "https://instagram.com/",
     twitter: "https://twitter.com/",
-    youtube: "https://www.youtube.com/",
+    youtube: "https://www.youtube.com/channel/",
     tiktok: "https://www.tiktok.com/@",
   };
+
   const profileUrl = cleanValue ? (platformBaseUrlMap[platform] || "") + cleanValue : "";
+
+  // Function to handle validation
+  const handleValidation = async () => {
+    if (!cleanValue || isTooShort) return;
+    await validateUsername(platform, cleanValue);
+  };
+
+  // Automatically trigger validation on value change
+  useEffect(() => {
+    if (rawValue) handleValidation();
+  }, [rawValue]);
 
   return (
     <div className="relative">
+      {/* Icon */}
       <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+
+      {/* Input field */}
       <Input
         name={platform}
-        value={value}
-        onChange={(e) => onChange(platform, e.target.value)}
-        onBlur={() => onChange(platform, rawValue, true)} // immediate validation on blur
+        value={rawValue}
+        onChange={(e) => {
+          setRawValue(e.target.value);
+          onChange(platform, e.target.value); // Propagate change to parent
+        }}
+        onBlur={handleValidation} // Validate on blur
         placeholder={placeholder}
         className={`pl-10 pr-10 transition-all focus:ring-2 focus:ring-purple-600 ${
           validationState.isValid
@@ -442,38 +534,31 @@ const SocialMediaInput = ({
         }`}
       />
 
-      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+      {/* Validation icons */}
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
         {validationState.isValidating && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
         {!validationState.isValidating && validationState.isValid && <CheckCircle className="h-4 w-4 text-green-500" />}
         {!validationState.isValidating && validationState.error && <AlertCircle className="h-4 w-4 text-red-500" />}
         {!validationState.isValidating && isTooShort && <AlertCircle className="h-4 w-4 text-amber-500" />}
       </div>
 
-      {/* Validation messages */}
+      {/* Validation feedback messages */}
       <div className="mt-1">
-        {/* Too short client-side hint */}
         {isTooShort && !validationState.isValid && !validationState.isValidating && (
           <p className="text-xs text-amber-600">Username must be at least 2 characters long</p>
         )}
-
-        {/* API error message */}
         {validationState.error && !validationState.isValidating && (
-          <p className="text-xs text-red-500">
-            {validationState.error.includes("not found") || validationState.error.includes("does not exist")
-              ? `@${cleanValue} does not exist on ${platform.charAt(0).toUpperCase() + platform.slice(1)}`
-              : validationState.error}
-          </p>
+          <p className="text-xs text-red-500">{validationState.error}</p>
         )}
-
-        {/* Success preview */}
         {validationState.isValid && validationState.data && (
           <div className="mt-2 flex items-center gap-3">
-            {/* optional avatar */}
-            {validationState.data.avatar && (
-              // Using plain img because next/image may require static domains config
-              <img src={validationState.data.avatar} alt={cleanValue} className="h-8 w-8 rounded-full object-cover" />
+            {validationState.data.profile_pic && (
+              <img
+                src={validationState.data.profile_pic}
+                alt={cleanValue}
+                className="h-8 w-8 rounded-full object-cover"
+              />
             )}
-
             <div className="text-xs">
               <div className="flex items-center gap-2">
                 <a href={profileUrl} target="_blank" rel="noreferrer" className="font-medium text-green-600 hover:underline">
@@ -483,7 +568,6 @@ const SocialMediaInput = ({
                   <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">Verified</span>
                 )}
               </div>
-
               <div className="text-xs text-gray-600">
                 {validationState.data.followers
                   ? `${formatFollowerCount(validationState.data.followers)} followers`
@@ -498,6 +582,9 @@ const SocialMediaInput = ({
     </div>
   );
 };
+
+
+
 
   return (
     <MainLayout hideFittingRoom hideRoomVisualizer>
@@ -857,124 +944,191 @@ const SocialMediaInput = ({
                 )}
               </div>
               <div className="p-6 pt-0">
-                {step === 1 && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
-                  >
-                    <h2 className="text-2xl font-semibold">
-                      Tell us about yourself
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      Start your journey as a UMetha influencer
-                    </p>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          First Name
-                        </label>
-                        <Input
-                          name="firstName"
-                          value={formData.firstName}
-                          onChange={handleInputChange}
-                          placeholder="Enter your first name"
-                          className="transition-all focus:ring-2 focus:ring-purple-600"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Last Name</label>
-                        <Input
-                          name="lastName"
-                          value={formData.lastName}
-                          onChange={handleInputChange}
-                          placeholder="Enter your last name"
-                          className="transition-all focus:ring-2 focus:ring-purple-600"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Email Address
-                      </label>
-                      <Input
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        type="email"
-                        placeholder="you@example.com"
-                        className="transition-all focus:ring-2 focus:ring-purple-600"
-                      />
-                    </div>
+           {step === 1 && (
+  <motion.div
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -20 }}
+    className="space-y-6"
+  >
+    {/* Section Header */}
+    <h2 className="text-2xl font-semibold">Tell us about yourself</h2>
+    <p className="text-gray-500 dark:text-gray-400">
+      Start your journey as a UMetha influencer
+    </p>
 
-<br></br>
-                       <label className="text-sm font-medium">
-                      Enter a password
-                      </label>
-                      <Input
-  type="password"
-  name="password"
-  placeholder="Create a password"
-  value={formData.password}
-  onChange={handleInputChange}
-  required
-  className="mt-3"
-/>
+    {/* Name Fields */}
+    <div className="grid grid-cols-2 gap-6">
+      <div className="space-y-2">
+        <label htmlFor="firstName" className="text-sm font-medium">
+          First Name
+        </label>
+        <Input
+          id="firstName"
+          name="firstName"
+          value={formData.firstName}
+          onChange={handleInputChange}
+          placeholder="Enter your first name"
+          required
+          className="transition-all focus:ring-2 focus:ring-purple-600"
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="lastName" className="text-sm font-medium">
+          Last Name
+        </label>
+        <Input
+          id="lastName"
+          name="lastName"
+          value={formData.lastName}
+          onChange={handleInputChange}
+          placeholder="Enter your last name"
+          required
+          className="transition-all focus:ring-2 focus:ring-purple-600"
+        />
+      </div>
+    </div>
+
+    {/* Email & Password Fields */}
+    <div className="grid grid-cols-2 gap-6">
+      <div className="space-y-2">
+        <label htmlFor="email" className="text-sm font-medium">
+          Email Address
+        </label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleInputChange}
+          placeholder="you@example.com"
+          required
+          className="transition-all focus:ring-2 focus:ring-purple-600"
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="password" className="text-sm font-medium">
+          Password
+        </label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          placeholder="Create a password"
+          value={formData.password}
+          onChange={handleInputChange}
+          required
+          className="transition-all focus:ring-2 focus:ring-purple-600"
+        />
+      </div>
+    </div>
+
+    {/* Phone Number + OTP */}
+    <div className="space-y-2 mt-4">
+      <label htmlFor="phone" className="text-sm font-medium">
+        Phone Number
+      </label>
+      <div className="flex gap-3">
+        <Input
+          id="phone"
+          name="phone"
+          type="tel"
+          value={formData.phone || ""}
+          onChange={handleInputChange}
+          placeholder="+1 555 123 4567"
+          required
+          className="transition-all focus:ring-2 focus:ring-purple-600"
+        />
+        <Button
+          type="button"
+          onClick={handleSendOtp}
+          disabled={!formData.phone?.trim() || isOtpSending}
+          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+        >
+          {isOtpSending ? "Sending..." : "Send OTP"}
+        </Button>
+      </div>
+
+      {/* OTP Input */}
+      {otpSent && (
+        <div className="space-y-2 mt-3">
+          <label htmlFor="otp" className="text-sm font-medium">
+            Enter OTP
+          </label>
+          <div className="flex gap-3">
+            <Input
+              id="otp"
+              name="otp"
+              value={formData.otp || ""}
+              onChange={handleInputChange}
+              placeholder="Enter 6-digit code"
+              className="transition-all focus:ring-2 focus:ring-purple-600"
+            />
+            <Button
+              type="button"
+              onClick={handleVerifyOtp}
+              disabled={isVerifyingOtp || !formData.otp?.trim()}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isVerifyingOtp ? "Verifying..." : "Verify"}
+            </Button>
+          </div>
+          {otpVerified && (
+            <p className="text-xs text-green-600 font-medium">
+              ✅ Phone verified successfully
+            </p>
+          )}
+          {otpError && <p className="text-xs text-red-600">{otpError}</p>}
+        </div>
+      )}
+    </div>
+
+    {/* Social Media Section */}
+    <fieldset className="space-y-5">
+      <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+        Social Media Presence
+      </legend>
+      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+        Enter your social media usernames{" "}
+        <span className="font-medium text-gray-600 dark:text-gray-300">
+          or full profile URLs
+        </span>
+        . We’ll automatically validate your accounts and fetch follower counts for accuracy.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+        {[
+          { platform: "instagram", icon: Instagram, placeholder: "Instagram username or URL" },
+          { platform: "youtube", icon: Youtube, placeholder: "YouTube channel name or URL" },
+          { platform: "twitter", icon: Twitter, placeholder: "Twitter handle or URL" },
+          { platform: "tiktok", icon: Smartphone, placeholder: "TikTok username or URL" },
+        ].map(({ platform, icon, placeholder }) => (
+          <SocialMediaInput
+            key={platform}
+            platform={platform}
+            icon={icon}
+            placeholder={placeholder}
+            value={formData[platform as keyof typeof formData]}
+            onChange={handleSocialMediaChange}
+          />
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-400 italic mt-1">
+        Tip: You only need to fill in the platforms you actively use.
+      </p>
+    </fieldset>
+ 
 
 
-                    
-          <div className="space-y-5">
-  <label className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-    Social Media Presence
-  </label>
-  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-    Enter your social media usernames <span className="font-medium text-gray-600 dark:text-gray-300">or full profile URLs</span>.
-    We’ll automatically validate your accounts and fetch follower counts for accuracy.
-  </p>
 
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-    <SocialMediaInput
-      platform="instagram"
-      icon={Instagram}
-      placeholder="Instagram username or profile URL"
-      value={formData.instagram}
-      onChange={handleSocialMediaChange}
-    />
-    <SocialMediaInput
-      platform="youtube"
-      icon={Youtube}
-      placeholder="YouTube channel name or profile URL"
-      value={formData.youtube}
-      onChange={handleSocialMediaChange}
-    />
-    <SocialMediaInput
-      platform="twitter"
-      icon={Twitter}
-      placeholder="Twitter handle or profile URL"
-      value={formData.twitter}
-      onChange={handleSocialMediaChange}
-    />
-    <SocialMediaInput
-      platform="tiktok"
-      icon={Smartphone}
-      placeholder="TikTok username or profile URL"
-      value={formData.tiktok}
-      onChange={handleSocialMediaChange}
-    />
-  </div>
-
-  <p className="text-xs text-gray-400 italic mt-1">
-    Tip: You only need to fill in the platforms you actively use.
-  </p>
-</div>
 
                     <motion.div className="pt-6" whileHover={{ scale: 1.01 }}>
                       <Button
                         size="lg"
                         className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => setStep(2)}
-                        disabled={!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim() || !hasValidSocialMedia()}
+                        disabled={!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim()  }
                       >
                         Continue
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -1027,27 +1181,6 @@ const SocialMediaInput = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">
-                        Total Followers
-                      </label>
-                      <Input
-                        name="followers"
-                        value={formData.followers}
-                        onChange={handleInputChange}
-                        placeholder="Combined followers across all platforms"
-                        className="transition-all focus:ring-2 focus:ring-purple-600"
-                        readOnly
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        This field is automatically calculated from your validated social media accounts
-                      </p>
-                      {getTotalFollowers() === 0 && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">
-                          ⚠️ Please add at least one valid social media account to continue
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
                         Tell Your Story
                       </label>
                       <Textarea
@@ -1058,12 +1191,13 @@ const SocialMediaInput = ({
                         className="min-h-[120px] transition-all focus:ring-2 focus:ring-purple-600"
                       />
                     </div>
+                    
                     <div className="pt-6 space-y-4">
                       <Button
                         size="lg"
                         className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={handleSubmit}
-                        disabled={!hasValidSocialMedia() || !formData.category || !formData.story.trim()}
+                        disabled={  !formData.category || !formData.story.trim()}
                       >
                         Submit Application
                         <ArrowRight className="ml-2 h-4 w-4" />

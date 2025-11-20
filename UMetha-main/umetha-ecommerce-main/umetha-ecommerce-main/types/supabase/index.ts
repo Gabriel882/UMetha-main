@@ -74,6 +74,33 @@ influencer_products: {
   };
 };
 
+shipping_tokens: {
+  Row: {
+    id: string;
+    user_id: string;
+    carrier: "ups" | "fedex" | "dhl";
+    access_token: string;
+    refresh_token: string | null;
+    expires_at: number;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    user_id: string;
+    carrier: "ups" | "fedex" | "dhl";
+    access_token: string;
+    refresh_token?: string | null;
+    expires_at: number;
+  };
+  Update: {
+    id?: string;
+    user_id?: string;
+    carrier?: "ups" | "fedex" | "dhl";
+    access_token?: string;
+    refresh_token?: string | null;
+    expires_at?: number;
+  };
+};
 
       
       users: {

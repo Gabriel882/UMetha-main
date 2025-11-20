@@ -19,7 +19,7 @@ import {
   Settings,
   Palette,
   Layout,
-  Typography,
+
   Zap,
   Globe,
   Smartphone,

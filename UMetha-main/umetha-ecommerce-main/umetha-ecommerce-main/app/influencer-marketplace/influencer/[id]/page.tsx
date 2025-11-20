@@ -3,29 +3,28 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { influencers, influencerProducts } from "@/data/influencer-data";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+
+
 import Image from "next/image";
 import Link from "next/link";
 import {
   Star,
   Heart,
-  ShoppingBag,
   Share2,
   Instagram,
   Twitter,
   Youtube,
-  Check,
-  MessageCircle,
   Users,
   TrendingUp,
-  Award,
   Package,
-  CheckCircle2, // Add this import for verified icon
+  CheckCircle2,
   SlidersHorizontal,
   LayoutGrid as GridIcon,
   List as LayoutListIcon,
   UserPlus,
   UserMinus,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import MainLayout from "@/components/main-layout";
 import PriceCartButton from "@/components/ui/price-cart-button";
 import { cn } from "@/lib/utils";
@@ -41,34 +39,41 @@ import { useFollowedInfluencers } from "@/context/followed-influencers-context";
 import { useProductModal } from "@/context/product-modal-context";
 import { useToast } from "@/hooks/use-toast";
 
+// ------------------------------------------------------------
+//  PAGE COMPONENT
+// ------------------------------------------------------------
 export default function InfluencerProfile() {
   const params = useParams();
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("products");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const { isFollowing, followInfluencer, unfollowInfluencer } =
-    useFollowedInfluencers();
+  const [liked, setLiked] = useState(false);
+const [shareOpen, setShareOpen] = useState(false);
+
+  const { isFollowing, follow, unfollow } = useFollowedInfluencers();
+
   const { toast } = useToast();
 
-  // Find the influencer based on the ID from the URL
+  // Convert ID param → number
   const influencerId = parseInt(params.id as string);
-  const influencer = influencers.find((inf) => inf.id === influencerId);
 
-  // Filter products for this influencer
+  // Type-safe influencer lookup
+  const influencer = influencers.find(
+    (inf: any) => inf.id === influencerId
+  );
+
+  // Filter products belonging to this influencer
   const products = influencerProducts.filter(
     (product) => product.influencerId === influencerId
   );
 
-  // Handle hydration
+  // Fix hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return null; // or a loading skeleton
-  }
+  if (!mounted) return null;
 
-  // If influencer not found
   if (!influencer) {
     return (
       <MainLayout>
@@ -85,30 +90,42 @@ export default function InfluencerProfile() {
     );
   }
 
-  // Handle follow/unfollow actions
-  const handleFollowToggle = () => {
-    if (isFollowing(influencerId)) {
-      unfollowInfluencer(influencerId);
-      toast({
-        title: "Unfollowed",
-        description: `You've unfollowed ${influencer.name}`,
-        variant: "default",
-      });
-    } else {
-      followInfluencer(influencerId);
-      toast({
-        title: "Following!",
-        description: `You're now following ${influencer.name}`,
-        variant: "default",
-      });
-    }
-  };
+
+
+
+  
+const handleFollowToggle = () => {
+  const currentlyFollowing = isFollowing(influencerId);
+
+  if (currentlyFollowing) {
+    unfollow(influencerId);
+    toast({
+      title: "Unsubscribed",
+      description: `You've unsubscribed from ${influencer.name}.`,
+    });
+  } else {
+    // follow() requires influencer info (not just ID)
+    follow({
+      id: influencer.id,
+      name: influencer.name,
+      avatar: influencer.avatar,
+      category: influencer.category,
+    });
+
+    toast({
+      title: "Subscribed!",
+      description: `You're now following ${influencer.name}.`,
+    });
+  }
+};
+
+
 
   const followStatus = isFollowing(influencerId);
 
   return (
     <MainLayout>
-      {/* Hero Section */}
+      {/* HERO SECTION */}
       <section className="relative h-[400px] -mt-6 -mx-6">
         <div className="absolute inset-0">
           <Image
@@ -136,13 +153,16 @@ export default function InfluencerProfile() {
                 </Avatar>
               </motion.div>
 
+              {/* Name + Bio */}
               <div className="flex-1">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <h1 className="text-4xl font-bold">{influencer.name}</h1>
+                    <h1 className="text-4xl font-bold">
+                      {influencer.name}'s Store
+                    </h1>
                     {influencer.verified && (
                       <Badge variant="secondary" className="h-6">
                         <CheckCircle2 className="h-3 w-3 mr-1 text-blue-500" />
@@ -164,11 +184,6 @@ export default function InfluencerProfile() {
                       <span className="text-muted-foreground">followers</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">4.8</span>
-                      <span className="text-muted-foreground">rating</span>
-                    </div>
-                    <div className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">
                         {influencer.engagement}
@@ -179,64 +194,180 @@ export default function InfluencerProfile() {
                 </motion.div>
               </div>
 
+              {/* Action Buttons */}
               <div className="flex gap-2">
-                {/* Follow/Unfollow Button */}
+                {/* Follow Button */}
+               <Button
+  variant={followStatus ? "outline" : "default"}
+  className={cn(
+    "gap-2",
+    followStatus
+      ? "border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600"
+      : "bg-gradient-to-r from-purple-500 to-pink-500"
+  )}
+  onClick={handleFollowToggle}
+>
+  {followStatus ? (
+    <>
+      <UserMinus className="h-4 w-4" />
+      Unsubscribe
+    </>
+  ) : (
+    <>
+      <UserPlus className="h-4 w-4" />
+      Subscribe
+    </>
+  )}
+</Button>
+
+
+                {/* Like Button */}
                 <Button
-                  variant={followStatus ? "outline" : "default"}
-                  className={cn(
-                    "gap-2",
-                    followStatus
-                      ? "border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                      : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  )}
-                  onClick={handleFollowToggle}
+                  variant="secondary"
+                  size="icon"
+                  className="rounded-full"
+                  onClick={() => {
+                    setLiked(!liked);
+                    toast({
+                      title: liked
+                        ? "Removed from favorites"
+                        : "Added to favorites",
+                      description: `${influencer.name} ${
+                        liked ? "removed from" : "added to"
+                      } your liked influencers.`,
+                    });
+                  }}
                 >
-                  {followStatus ? (
-                    <>
-                      <UserMinus className="h-4 w-4" />
-                      Unfollow
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4" />
-                      Follow
-                    </>
-                  )}
+                  <Heart
+                    className={`h-4 w-4 ${
+                      liked ? "fill-red-500 text-red-500" : ""
+                    }`}
+                  />
                 </Button>
 
-                {/* Social Media Icons */}
-                {Object.entries(influencer.social).map(([platform, handle]) => {
-                  const Icon = {
-                    instagram: Instagram,
-                    twitter: Twitter,
-                    youtube: Youtube,
-                  }[platform];
+               {/* Social Links */}
+{Object.entries(influencer.social).map(([platform, handle]) => {
+  // Safe mapping for allowed platforms
+  const iconMap: Record<string, React.ElementType> = {
+    instagram: Instagram,
+    twitter: Twitter,
+    youtube: Youtube,
+  };
 
-                  return (
-                    <Button
-                      key={platform}
-                      variant="secondary"
-                      size="icon"
-                      className="rounded-full"
-                      asChild
-                    >
-                      <a
-                        href={`https://${platform}.com/${handle}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Icon className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  );
-                })}
+  const Icon = iconMap[platform];
+
+  // Skip unknown social platforms
+  if (!Icon) return null;
+
+  return (
+    <Button
+      key={platform}
+      variant="secondary"
+      size="icon"
+      className="rounded-full"
+      asChild
+    >
+      <a
+        href={`https://${platform}.com/${handle}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <Icon className="h-4 w-4" />
+      </a>
+    </Button>
+  );
+})}
+
+
+               {/* Share */}
+<>
+  <Button
+    variant="secondary"
+    size="icon"
+    className="rounded-full"
+    onClick={() => setShareOpen(true)}
+  >
+    <Share2 className="h-4 w-4" />
+  </Button>
+
+  {/* SHARE MODAL */}
+  <AnimatePresence>
+    {shareOpen && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="w-full max-w-md"
+        >
+          <Card className="rounded-2xl p-4 bg-background">
+            {/* HEADER */}
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold">Share</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShareOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* SHARE ICON ROW */}
+            <CardContent className="grid grid-cols-5 gap-4 text-center">
+              <Button className="rounded-full p-3">Embed</Button>
+              <Button className="rounded-full p-3">WhatsApp</Button>
+              <Button className="rounded-full p-3">Facebook</Button>
+              <Button className="rounded-full p-3">X</Button>
+              <Button className="rounded-full p-3">Email</Button>
+            </CardContent>
+
+            {/* LINK COPY FIELD */}
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                className="w-full border rounded-xl px-3 py-2 text-sm"
+                value={typeof window !== 'undefined' ? window.location.href : ''}
+                readOnly
+              />
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast({
+                      title: "Link copied!",
+                      description: "Profile link copied to clipboard."
+                    });
+                  } catch {
+                    toast({
+                      title: "Error",
+                      description: "Could not copy link.",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</>
+
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Store Content */}
+      {/* PRODUCTS SECTION */}
       <div className="container mx-auto px-6 py-8">
         <Tabs defaultValue="all" className="space-y-8">
           <div className="flex items-center justify-between">
@@ -251,9 +382,6 @@ export default function InfluencerProfile() {
               <Button variant="outline" className="gap-2">
                 <SlidersHorizontal className="h-4 w-4" />
                 Filters
-                <Badge variant="secondary" className="ml-2">
-                  2
-                </Badge>
               </Button>
 
               <div className="border-l h-6" />
@@ -277,7 +405,7 @@ export default function InfluencerProfile() {
             </div>
           </div>
 
-          <TabsContent value="all" className="space-y-8">
+          <TabsContent value="all">
             <motion.div
               className={cn(
                 "grid gap-6",
@@ -308,40 +436,44 @@ export default function InfluencerProfile() {
                     No products found
                   </h3>
                   <p className="text-muted-foreground">
-                    This influencer hasn't added any products yet.
+                    This influencer has no listed products yet.
                   </p>
                 </div>
               )}
             </motion.div>
           </TabsContent>
-
-          {/* Similar TabsContent for other tabs */}
         </Tabs>
       </div>
     </MainLayout>
   );
 }
 
-// Product Card Component
-function ProductCard({ product }) {
+// ------------------------------------------------------------
+//  PRODUCT GRID CARD
+// ------------------------------------------------------------
+function ProductCard({ product }: any) {
   const { openModal } = useProductModal();
-  
+
   return (
     <Card className="group relative overflow-hidden border-border/50 hover:shadow-xl transition-all duration-300">
-      <div 
+      <div
         className="relative aspect-square cursor-pointer"
-        onClick={() => openModal({
-          id: product.id,
-          name: product.name,
-          description: product.description || '',
-          price: product.price,
-          images: [product.image],
-          category: product.category ? {
-            name: product.category,
-            slug: product.category.toLowerCase().replace(/\s+/g, '-')
-          } : undefined,
-          stock: product.stock || 0
-        })}
+        onClick={() =>
+          openModal({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            images: [product.image],
+            stock: product.stock,
+            category: {
+              name: product.category,
+              slug: product.category
+                ?.toLowerCase()
+                .replace(/\s+/g, "-"),
+            },
+          })
+        }
       >
         <Image
           src={product.image}
@@ -350,64 +482,54 @@ function ProductCard({ product }) {
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
 
-        {/* Overlay & Quick Actions */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
-          <div className="absolute bottom-4 left-4 right-4 space-y-4">
-            <PriceCartButton
-              id={product.id}
-              name={product.name}
-              price={product.price}
-              originalPrice={
-                product.discount
-                  ? product.price * (1 + product.discount / 100)
-                  : undefined
-              }
-              image={product.image}
-            />
-          </div>
-        </div>
-
-        {/* Badges */}
-        <div className="absolute top-4 left-4 flex flex-col gap-2">
-          {product.discount > 0 && (
-            <Badge className="bg-red-500 text-white border-0">
-              -{product.discount}% OFF
-            </Badge>
-          )}
-          {product.new && (
-            <Badge className="bg-emerald-500 text-white border-0">NEW</Badge>
-          )}
-        </div>
+        {product.discount > 0 && (
+          <Badge className="absolute top-4 left-4 bg-red-500 text-white">
+            -{product.discount}% OFF
+          </Badge>
+        )}
       </div>
 
       <CardContent className="p-4">
-        <div className="space-y-2">
-          <h3 className="font-medium line-clamp-2">{product.name}</h3>
+        <h3 className="font-medium line-clamp-2">{product.name}</h3>
 
-          <div className="flex items-center gap-1">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star
-                key={i}
-                className={cn(
-                  "h-4 w-4",
-                  i < Math.floor(product.rating)
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300"
-                )}
-              />
-            ))}
-            <span className="text-sm text-muted-foreground ml-2">
-              ({product.reviews})
-            </span>
-          </div>
+        <div className="flex items-center gap-1 mt-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star
+              key={i}
+              className={`h-4 w-4 ${
+                i < Math.floor(product.rating)
+                  ? "text-yellow-400 fill-yellow-400"
+                  : "text-gray-300"
+              }`}
+            />
+          ))}
+          <span className="text-sm text-muted-foreground ml-2">
+            ({product.reviews})
+          </span>
+        </div>
+
+        <div className="mt-4">
+          <PriceCartButton
+            id={product.id}
+            name={product.name}
+            price={product.price}
+            image={product.image}
+            originalPrice={
+              product.discount
+                ? product.price * (1 + product.discount / 100)
+                : undefined
+            }
+          />
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// Product List Item Component
-function ProductListItem({ product }) {
+// ------------------------------------------------------------
+//  PRODUCT LIST VIEW ITEM
+// ------------------------------------------------------------
+function ProductListItem({ product }: any) {
   return (
     <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300">
       <div className="flex gap-6">
@@ -416,58 +538,46 @@ function ProductListItem({ product }) {
             src={product.image}
             alt={product.name}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-110"
+            className="object-cover"
           />
-          {product.discount > 0 && (
-            <Badge className="absolute top-4 left-4 bg-red-500 text-white border-0">
-              -{product.discount}% OFF
-            </Badge>
-          )}
         </div>
 
         <div className="flex-1 p-6">
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-medium mb-2">{product.name}</h3>
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {product.description}
-              </p>
-            </div>
+          <h3 className="text-lg font-medium">{product.name}</h3>
 
-            <div className="flex items-center gap-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star
-                  key={i}
-                  className={cn(
-                    "h-4 w-4",
-                    i < Math.floor(product.rating)
-                      ? "text-yellow-400 fill-yellow-400"
-                      : "text-gray-300"
-                  )}
-                />
-              ))}
-              <span className="text-sm text-muted-foreground ml-2">
-                ({product.reviews} reviews)
-              </span>
-            </div>
+          <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
+            {product.description}
+          </p>
 
-            <div className="flex items-center justify-between">
-              <PriceCartButton
-                id={product.id}
-                name={product.name}
-                price={product.price}
-                originalPrice={
-                  product.discount
-                    ? product.price * (1 + product.discount / 100)
-                    : undefined
-                }
-                image={product.image}
+          <div className="flex items-center gap-1 mt-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={`h-4 w-4 ${
+                  i < Math.floor(product.rating)
+                    ? "text-yellow-400 fill-yellow-400"
+                    : "text-gray-300"
+                }`}
               />
+            ))}
+          </div>
 
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Heart className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="flex items-center justify-between mt-4">
+            <PriceCartButton
+              id={product.id}
+              name={product.name}
+              price={product.price}
+              image={product.image}
+              originalPrice={
+                product.discount
+                  ? product.price * (1 + product.discount / 100)
+                  : undefined
+              }
+            />
+
+            <Button variant="ghost" size="icon">
+              <Heart className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>

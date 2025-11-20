@@ -32,22 +32,32 @@ import { supabase } from "@/lib/supabase";
 interface ProductFormData {
   name: string;
   description: string;
-  price: string;
-  category: string;
-  stock: string;
+  price: number | string;
+  category_id: string;   // FIXED
+  stock: number | string;
   sku: string;
   images: string[];
   featured: boolean;
-  status: 'draft' | 'active' | 'inactive';
+  status: "draft" | "active" | "inactive";
   tags: string[];
-  weight: string;
+  weight: number | string | null;
   dimensions: {
-    length: string;
-    width: string;
-    height: string;
+    length: number | string | null;
+    width: number | string | null;
+    height: number | string | null;
   };
+
+  // SEO
   seoTitle: string;
   seoDescription: string;
+
+  // Shipping
+  carrier: "ups" | "fedex" | "dhl" | "";
+  apiKey: string;
+  apiSecret: string;
+  accountNumber: string;
+  packageType: "box" | "envelope" | "pallet" | "";
+  declaredValue: number | string | null;
 }
 
 const categories = [
@@ -68,66 +78,100 @@ export default function NewProductPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
-  const [images, setImages] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState("");
+
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     description: "",
-    price: "",
-    category: "",
-    stock: "",
+    price: 0,
+    category_id: "",
+    stock: 0,
     sku: "",
     images: [],
     featured: false,
-    status: 'draft',
+    status: "draft",
     tags: [],
-    weight: "",
-    dimensions: {
-      length: "",
-      width: "",
-      height: ""
-    },
+    weight: 0,
+    dimensions: { length: 0, width: 0, height: 0 },
     seoTitle: "",
-    seoDescription: ""
+    seoDescription: "",
+
+    carrier: "",
+    apiKey: "",
+    apiSecret: "",
+    accountNumber: "",
+    packageType: "",
+    declaredValue: null,
   });
 
+  const [newTag, setNewTag] = useState("");
+
+  // Shipping result
+  const [shippingInfo, setShippingInfo] = useState<any>(null);
+
+  // Mock functions
+  const fetchShippingRates = async () => {
+    setShippingInfo({
+      status: "success",
+      message: "Mock: Shipping rates retrieved",
+      rates: [
+        { service: "Ground", price: 12.50 },
+        { service: "Express", price: 24.75 }
+      ]
+    });
+  };
+
+  const schedulePickup = async () => {
+    setShippingInfo({
+      status: "success",
+      message: "Mock: Pickup scheduled successfully",
+    });
+  };
+
+  const trackShipment = async () => {
+    setShippingInfo({
+      status: "success",
+      message: "Mock: Tracking info",
+      tracking: {
+        status: "In Transit",
+        eta: "2025-01-18"
+      }
+    });
+  };
+
+  /** Handles all form updates, supports nested fields */
   const handleInputChange = (field: string, value: any) => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      setFormData(prev => ({
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".");
+      setFormData((prev) => ({
         ...prev,
         [parent]: {
-          ...prev[parent as keyof ProductFormData],
-          [child]: value
-        }
+          ...(prev as any)[parent],
+          [child]: value,
+        },
       }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
+      setFormData((prev) => ({ ...prev, [field]: value }));
     }
   };
 
+  /** Image Upload */
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const uploadPromises = Array.from(files).map(async (file) => {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `products/${user?.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('product-images')
+        .from("product-images")
         .upload(filePath, file);
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
-        .from('product-images')
+        .from("product-images")
         .getPublicUrl(filePath);
 
       return data.publicUrl;
@@ -135,107 +179,116 @@ export default function NewProductPage() {
 
     try {
       const uploadedUrls = await Promise.all(uploadPromises);
-      setFormData(prev => ({
+
+      setFormData((prev) => ({
         ...prev,
-        images: [...prev.images, ...uploadedUrls]
+        images: [...prev.images, ...uploadedUrls],
       }));
       toast.success("Images uploaded successfully!");
     } catch (error) {
-      console.error('Error uploading images:', error);
       toast.error("Failed to upload images");
     }
   };
 
   const removeImage = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      images: prev.images.filter((_, i) => i !== index)
+      images: prev.images.filter((_, i) => i !== index),
     }));
   };
 
+  /** Tag functions */
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        tags: [...prev.tags, newTag.trim()]
+        tags: [...prev.tags, newTag.trim()],
       }));
       setNewTag("");
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      tags: prev.tags.filter((t) => t !== tagToRemove),
     }));
   };
 
-  const handleSubmit = async (status: 'draft' | 'active') => {
+  /** Submit handler */
+  const handleSubmit = async (status: "draft" | "active") => {
     if (!user) {
-      toast.error("You must be logged in to create products");
+      toast.error("You must be logged in.");
       return;
     }
 
-    // Validation
-    if (!formData.name.trim()) {
-      toast.error("Product name is required");
-      return;
-    }
-    if (!formData.description.trim()) {
-      toast.error("Product description is required");
-      return;
-    }
-    if (!formData.price || parseFloat(formData.price) <= 0) {
-      toast.error("Valid price is required");
-      return;
-    }
-    if (!formData.category) {
-      toast.error("Category is required");
-      return;
-    }
+    // VALIDATION FIXES
+    if (!formData.name.trim()) return toast.error("Name required");
+    if (!formData.description.trim()) return toast.error("Description required");
+    if (!formData.price || Number(formData.price) <= 0) return toast.error("Valid price required");
+    if (!formData.category_id) return toast.error("Category required");
 
     setLoading(true);
+
     try {
       const productData = {
         name: formData.name,
         description: formData.description,
-        price: parseFloat(formData.price),
-        category_id: formData.category,
-        stock: parseInt(formData.stock) || 0,
+        price: Number(formData.price),
+        category_id: formData.category_id,
+        stock: Number(formData.stock),
         sku: formData.sku || `PROD-${Date.now()}`,
         images: formData.images,
         featured: formData.featured,
-        status: status,
+        status,
         tags: formData.tags,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-        dimensions: formData.dimensions,
+        weight: Number(formData.weight) || null,
+        dimensions: {
+          length: Number(formData.dimensions.length),
+          width: Number(formData.dimensions.width),
+          height: Number(formData.dimensions.height),
+        },
         seo_title: formData.seoTitle,
         seo_description: formData.seoDescription,
+
         influencer_id: user.id,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+
+        // shipping fields
+        carrier: formData.carrier,
+        api_key: formData.apiKey,
+        api_secret: formData.apiSecret,
+        account_number: formData.accountNumber,
+        package_type: formData.packageType,
+        declared_value: Number(formData.declaredValue) || null,
       };
 
       const { data, error } = await supabase
-        .from('influencer_products')
+        .from("influencer_products")
         .insert([productData])
         .select()
         .single();
 
       if (error) throw error;
 
-      toast.success(`Product ${status === 'draft' ? 'saved as draft' : 'published'} successfully!`);
-      router.push('/dashboard/influencer/products');
+      toast.success(`Product ${status === "draft" ? "saved" : "published"} successfully!`);
+      router.push("/dashboard/influencer/products");
     } catch (error) {
-      console.error('Error creating product:', error);
+      console.error(error);
       toast.error("Failed to create product");
     } finally {
       setLoading(false);
     }
   };
 
+  // ================================
+  //          JSX RETURN
+  // ================================
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" asChild>
@@ -249,147 +302,150 @@ export default function NewProductPage() {
             <p className="text-gray-500">Add a new product to your store</p>
           </div>
         </div>
+
+        {/* Save buttons */}
         <div className="flex gap-3">
           <Button 
             variant="outline" 
-            onClick={() => handleSubmit('draft')}
+            onClick={() => handleSubmit("draft")}
             disabled={loading}
           >
-            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save as Draft
+            {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Draft
           </Button>
+
           <Button 
-            onClick={() => handleSubmit('active')}
+            onClick={() => handleSubmit("active")}
             disabled={loading}
             className="bg-gradient-to-r from-indigo-500 to-purple-500"
           >
-            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
-            Publish Product
+            {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+            Publish
           </Button>
         </div>
       </div>
 
+      {/* =================== TABS ===================== */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="basic">Basic Info</TabsTrigger>
           <TabsTrigger value="media">Media</TabsTrigger>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="seo">SEO & Settings</TabsTrigger>
+          <TabsTrigger value="seo">SEO</TabsTrigger>
         </TabsList>
 
+        {/* BASIC INFO TAB */}
         <TabsContent value="basic" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Product Information</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Product Information</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
+
+                  {/* Name */}
                   <div>
-                    <Label htmlFor="name">Product Name *</Label>
-                    <Input
-                      id="name"
+                    <Label>Product Name *</Label>
+                    <Input 
                       value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
-                      placeholder="Enter product name"
+                      onChange={(e) => handleInputChange("name", e.target.value)}
                     />
                   </div>
+
+                  {/* Description */}
                   <div>
-                    <Label htmlFor="description">Description *</Label>
+                    <Label>Description *</Label>
                     <Textarea
-                      id="description"
                       value={formData.description}
-                      onChange={(e) => handleInputChange('description', e.target.value)}
-                      placeholder="Describe your product"
-                      rows={4}
+                      onChange={(e) => handleInputChange("description", e.target.value)}
                     />
                   </div>
+
                   <div className="grid grid-cols-2 gap-4">
+                    {/* Price */}
                     <div>
-                      <Label htmlFor="price">Price *</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                        <Input
-                          id="price"
-                          type="number"
-                          step="0.01"
-                          value={formData.price}
-                          onChange={(e) => handleInputChange('price', e.target.value)}
-                          placeholder="0.00"
-                          className="pl-8"
-                        />
-                      </div>
+                      <Label>Price *</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => handleInputChange("price", e.target.value)}
+                      />
                     </div>
+
+                    {/* Category */}
                     <div>
-                      <Label htmlFor="category">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
+                      <Label>Category *</Label>
+                      <Select 
+                        value={formData.category_id}
+                        onValueChange={(v) => handleInputChange("category_id", v)}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent>
-                          {categories.map((category) => (
-                            <SelectItem key={category} value={category.toLowerCase()}>
-                              {category}
+                          {categories.map((c) => (
+                            <SelectItem key={c} value={c.toLowerCase()}>
+                              {c}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
+
                 </CardContent>
               </Card>
 
+              {/* TAGS */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Product Tags</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Tags</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
+
                   <div className="flex gap-2">
-                    <Input
+                    <Input 
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
-                      placeholder="Add a tag"
-                      onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                      placeholder="Add tag"
+                      onKeyDown={(e) => e.key === "Enter" && addTag()}
                     />
-                    <Button onClick={addTag} variant="outline">
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                    <Button onClick={addTag} variant="outline"><Plus /></Button>
                   </div>
+
                   <div className="flex flex-wrap gap-2">
-                    {formData.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                    {formData.tags.map((tag) => (
+                      <Badge key={tag} className="flex gap-1 items-center">
                         {tag}
                         <X 
-                          className="h-3 w-3 cursor-pointer" 
+                          className="h-3 w-3 cursor-pointer"
                           onClick={() => removeTag(tag)}
                         />
                       </Badge>
                     ))}
                   </div>
+
                 </CardContent>
               </Card>
             </div>
 
+            {/* STATUS */}
             <div className="space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Product Status</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Status</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
+
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="featured">Featured Product</Label>
-                    <Switch
-                      id="featured"
+                    <Label>Featured Product</Label>
+                    <Switch 
                       checked={formData.featured}
-                      onCheckedChange={(checked) => handleInputChange('featured', checked)}
+                      onCheckedChange={(v) => handleInputChange("featured", v)}
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={formData.status} onValueChange={(value: 'draft' | 'active' | 'inactive') => handleInputChange('status', value)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label>Status</Label>
+                    <Select 
+                      value={formData.status}
+                      onValueChange={(v) => handleInputChange("status", v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="draft">Draft</SelectItem>
                         <SelectItem value="active">Active</SelectItem>
@@ -397,177 +453,281 @@ export default function NewProductPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
                 </CardContent>
               </Card>
             </div>
           </div>
         </TabsContent>
 
+        {/* ============ MEDIA TAB ============ */}
         <TabsContent value="media" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Product Images</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Images</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-500 mb-4">Upload product images</p>
-                <input
+
+              <div className="border-2 border-dashed p-6 rounded-lg text-center">
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-gray-500">Upload product images</p>
+
+                <input 
                   type="file"
                   multiple
                   accept="image/*"
+                  id="image-upload"
                   onChange={handleImageUpload}
                   className="hidden"
-                  id="image-upload"
                 />
+
                 <Button asChild>
-                  <label htmlFor="image-upload" className="cursor-pointer">
-                    <ImagePlus className="h-4 w-4 mr-2" />
-                    Choose Images
-                  </label>
+                  <label htmlFor="image-upload"><ImagePlus className="mr-2 h-4 w-4" /> Choose</label>
                 </Button>
               </div>
-              
+
               {formData.images.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {formData.images.map((image, index) => (
-                    <div key={index} className="relative group">
-                      <Image
-                        src={image}
-                        alt={`Product image ${index + 1}`}
+                  {formData.images.map((img, i) => (
+                    <div key={i} className="relative group">
+                      <Image 
+                        src={img}
+                        alt="Product"
                         width={200}
                         height={200}
-                        className="rounded-lg object-cover w-full h-32"
+                        className="rounded-lg object-cover h-32 w-full"
                       />
-                      <Button
+                      <Button 
                         size="sm"
+                        onClick={() => removeImage(i)}
                         variant="destructive"
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => removeImage(index)}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"
                       >
-                        <X className="h-4 w-4" />
+                        <X />
                       </Button>
                     </div>
                   ))}
                 </div>
               )}
+
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="inventory" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Inventory Management</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => handleInputChange('sku', e.target.value)}
-                    placeholder="Product SKU"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="stock">Stock Quantity</Label>
-                  <Input
-                    id="stock"
-                    type="number"
-                    value={formData.stock}
-                    onChange={(e) => handleInputChange('stock', e.target.value)}
-                    placeholder="0"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+{/* ============ INVENTORY TAB ============ */}
+<TabsContent value="inventory" className="space-y-6">
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Physical Properties</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="weight">Weight (lbs)</Label>
-                  <Input
-                    id="weight"
-                    type="number"
-                    step="0.1"
-                    value={formData.weight}
-                    onChange={(e) => handleInputChange('weight', e.target.value)}
-                    placeholder="0.0"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label htmlFor="length">Length (in)</Label>
-                    <Input
-                      id="length"
-                      type="number"
-                      step="0.1"
-                      value={formData.dimensions.length}
-                      onChange={(e) => handleInputChange('dimensions.length', e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="width">Width (in)</Label>
-                    <Input
-                      id="width"
-                      type="number"
-                      step="0.1"
-                      value={formData.dimensions.width}
-                      onChange={(e) => handleInputChange('dimensions.width', e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="height">Height (in)</Label>
-                    <Input
-                      id="height"
-                      type="number"
-                      step="0.1"
-                      value={formData.dimensions.height}
-                      onChange={(e) => handleInputChange('dimensions.height', e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+  {/* Inventory + Physical Grid */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    {/* Inventory */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Inventory</CardTitle>
+       <p className="text-sm text-muted-foreground">
+  Connect shipping carriers to manage shipments.
+</p>
+
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div>
+          <Label>Label / SKU</Label>
+          <Input
+            placeholder="SKU12345"
+            value={formData.sku}
+            onChange={(e) => handleInputChange("sku", e.target.value)}
+          />
+        </div>
+
+        <div>
+          <Label>Stock</Label>
+          <Input
+            type="number"
+            placeholder="0"
+            value={formData.stock ?? ""}
+            onChange={(e) => handleInputChange("stock", Number(e.target.value))}
+          />
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Physical Properties */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Physical Properties</CardTitle>
+        <p>Dimensions and weight for shipping.</p>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div>
+          <Label>Weight (lbs)</Label>
+          <Input
+            type="number"
+            placeholder="0.0"
+            value={formData.weight ?? ""}
+            onChange={(e) => handleInputChange("weight", Number(e.target.value))}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label>Length (in)</Label>
+            <Input
+              type="number"
+              value={formData.dimensions.length ?? ""}
+              onChange={(e) =>
+                handleInputChange("dimensions.length", Number(e.target.value))
+              }
+            />
           </div>
-        </TabsContent>
 
-        <TabsContent value="seo" className="space-y-6">
+          <div>
+            <Label>Width (in)</Label>
+            <Input
+              type="number"
+              value={formData.dimensions.width ?? ""}
+              onChange={(e) =>
+                handleInputChange("dimensions.width", Number(e.target.value))
+              }
+            />
+          </div>
+
+          <div>
+            <Label>Height (in)</Label>
+            <Input
+              type="number"
+              value={formData.dimensions.height ?? ""}
+              onChange={(e) =>
+                handleInputChange("dimensions.height", Number(e.target.value))
+              }
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+  </div>
+{/* ============ SHIPPING INTEGRATION ============ */}
+<Card>
+  <CardHeader>
+    <CardTitle>Shipping & Carrier Integrations</CardTitle>
+    <p className="text-sm text-muted-foreground">
+      Connect a carrier and create shipments for orders.
+    </p>
+  </CardHeader>
+
+  <CardContent className="space-y-6">
+
+    {/* Carrier Select */}
+    <div>
+      <Label>Carrier</Label>
+
+      <Select
+        value={formData.carrier}
+        onValueChange={(value) => handleInputChange("carrier", value)}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select carrier" />
+        </SelectTrigger>
+
+        <SelectContent>
+          <SelectItem value="ups">UPS</SelectItem>
+          <SelectItem value="fedex">FedEx</SelectItem>
+          <SelectItem value="dhl">DHL</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {/* Redirect Button */}
+    {formData.carrier && (
+      <Button
+        className="w-full"
+        onClick={() =>
+          router.push("/dashboard/influencer/shipping/create-shipment")
+        }
+      >
+        Setup Shipping
+      </Button>
+    )}
+
+    {/* Package Options */}
+    <div className="grid md:grid-cols-2 gap-4">
+
+      <div>
+        <Label>Package Type</Label>
+
+        <Select
+          value={formData.packageType}
+          onValueChange={(value) =>
+            handleInputChange("packageType", value)
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select package" />
+          </SelectTrigger>
+
+          <SelectContent>
+            <SelectItem value="box">Box</SelectItem>
+            <SelectItem value="envelope">Envelope</SelectItem>
+            <SelectItem value="pallet">Pallet</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Declared Value ($)</Label>
+        <Input
+          type="number"
+          placeholder="0.00"
+          value={formData.declaredValue ?? ""}
+          onChange={(e) =>
+            handleInputChange("declaredValue", Number(e.target.value))
+          }
+        />
+      </div>
+    </div>
+
+    {/* Preview */}
+    {shippingInfo && (
+      <div className="p-4 border bg-muted rounded-md">
+        <pre className="text-sm">
+          {JSON.stringify(shippingInfo, null, 2)}
+        </pre>
+      </div>
+    )}
+  </CardContent>
+</Card>
+
+</TabsContent>
+
+
+
+        {/* ============ SEO TAB ============ */}
+        <TabsContent value="seo">
           <Card>
-            <CardHeader>
-              <CardTitle>SEO Settings</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>SEO Settings</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+
               <div>
-                <Label htmlFor="seoTitle">SEO Title</Label>
-                <Input
-                  id="seoTitle"
+                <Label>SEO Title</Label>
+                <Input 
                   value={formData.seoTitle}
-                  onChange={(e) => handleInputChange('seoTitle', e.target.value)}
-                  placeholder="SEO optimized title"
+                  onChange={(e) => handleInputChange("seoTitle", e.target.value)}
                 />
               </div>
+
               <div>
-                <Label htmlFor="seoDescription">SEO Description</Label>
-                <Textarea
-                  id="seoDescription"
-                  value={formData.seoDescription}
-                  onChange={(e) => handleInputChange('seoDescription', e.target.value)}
-                  placeholder="SEO optimized description"
+                <Label>SEO Description</Label>
+                <Textarea 
                   rows={3}
+                  value={formData.seoDescription}
+                  onChange={(e) => handleInputChange("seoDescription", e.target.value)}
                 />
               </div>
+
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );
