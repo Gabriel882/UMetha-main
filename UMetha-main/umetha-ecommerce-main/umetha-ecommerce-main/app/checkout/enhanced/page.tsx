@@ -2,14 +2,12 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ChevronLeft,
-  CreditCard,
   ArrowRight,
   Truck,
   Shield,
-  Check,
   MapPin,
   Calendar,
   Mail,
@@ -30,6 +28,7 @@ export default function CheckoutPage() {
   const { user, supabase } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
   const [activeStep, setActiveStep] = useState("shipping");
   const [formData, setFormData] = useState({
     firstName: "",
@@ -41,7 +40,6 @@ export default function CheckoutPage() {
     state: "",
     postalCode: "",
     country: "United States",
-    saveInfo: true,
     shippingMethod: "standard",
     paymentMethod: "credit-card",
     cardNumber: "",
@@ -50,6 +48,7 @@ export default function CheckoutPage() {
     cardCvc: "",
     paypalEmail: "",
   });
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("credit-card");
@@ -69,100 +68,54 @@ export default function CheckoutPage() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [name]: type === "checkbox" ? checked : value,
-    });
+    }));
     if (formErrors[name]) {
-      setFormErrors({ ...formErrors, [name]: "" });
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
   const validateForm = (step: string) => {
     const errors: Record<string, string> = {};
+
     if (step === "shipping") {
       if (!formData.firstName) errors.firstName = "First name is required";
       if (!formData.lastName) errors.lastName = "Last name is required";
       if (!formData.email) errors.email = "Email is required";
-      else if (!/\S+@\S+\.\S+/.test(formData.email))
-        errors.email = "Email is invalid";
+      if (!/\S+@\S+\.\S+/.test(formData.email)) errors.email = "Invalid email";
       if (!formData.address) errors.address = "Address is required";
       if (!formData.city) errors.city = "City is required";
       if (!formData.postalCode) errors.postalCode = "Postal code is required";
-    } else if (step === "payment") {
-      if (!selectedPaymentMethod) errors.paymentMethod = "Please select a payment method";
+    }
+
+    if (step === "payment") {
       if (selectedPaymentMethod === "credit-card") {
-        if (!formData.cardNumber) errors.cardNumber = "Card number is required";
-        if (!formData.cardName) errors.cardName = "Cardholder name is required";
-        if (!formData.cardExpiry) errors.cardExpiry = "Expiry date is required";
-        if (!formData.cardCvc) errors.cardCvc = "CVC is required";
-      } else if (selectedPaymentMethod === "paypal") {
-        if (!formData.paypalEmail) errors.paypalEmail = "PayPal email is required";
+        if (!formData.cardNumber) errors.cardNumber = "Card number required";
+        if (!formData.cardName) errors.cardName = "Card name required";
+        if (!formData.cardExpiry) errors.cardExpiry = "Expiry required";
+        if (!formData.cardCvc) errors.cardCvc = "CVC required";
+      }
+      if (selectedPaymentMethod === "paypal") {
+        if (!formData.paypalEmail) errors.paypalEmail = "PayPal email required";
       }
     }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleCardNumberChange = (e) => {
-    const formattedValue = formatCardNumber(e.target.value);
-    setFormData({ ...formData, cardNumber: formattedValue });
-    if (formErrors.cardNumber) {
-      setFormErrors({ ...formErrors, cardNumber: "" });
-    }
+  const simulatePaymentProcess = async () => {
+    return { success: true };
   };
 
-  const formatCardNumber = (value) => {
-    const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || "";
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-    if (parts.length) {
-      return parts.join(" ");
-    } else {
-      return value;
-    }
-  };
-
-  const handleExpiryChange = (e) => {
-    let { value } = e.target;
-    value = value.replace(/\D/g, "");
-    if (value.length > 2) {
-      value = value.slice(0, 2) + "/" + value.slice(2, 4);
-    }
-    setFormData({ ...formData, cardExpiry: value });
-    if (formErrors.cardExpiry) {
-      setFormErrors({ ...formErrors, cardExpiry: "" });
-    }
-  };
-
-  const handleContinue = () => {
-    if (validateForm(activeStep)) {
-      if (activeStep === "shipping") {
-        setActiveStep("payment");
-      } else if (activeStep === "payment") {
-        handleSubmitOrder();
-      }
-    }
-  };
-
-  const handleBack = () => {
-    if (activeStep === "payment") {
-      setActiveStep("shipping");
-    }
-  };
-
-  const handleSubmitOrder = () => {
+  // ⬇⬇⬇ FIX: THIS FUNCTION MUST BE ASYNC
+  const handleSubmitOrder = async () => {
     if (!validateForm("payment")) return;
     setIsProcessing(true);
-    // Process payment based on selected payment method
-    // For simplicity, assuming payment is successful
 
     const createOrder = async () => {
-      // Create the order in your orders table
       const { data, error } = await supabase
         .from("orders")
         .insert({
@@ -177,11 +130,10 @@ export default function CheckoutPage() {
             postalCode: formData.postalCode,
             country: formData.country,
           },
-          payment_method: formData.paymentMethod,
-          order_items: items.map((item) => ({
-            product_id: item.id,
-            quantity: item.quantity,
-            price: item.price,
+          order_items: items.map((i) => ({
+            product_id: i.id,
+            quantity: i.quantity,
+            price: i.price,
           })),
           status: "processing",
           payment_status: "paid",
@@ -189,59 +141,66 @@ export default function CheckoutPage() {
         })
         .select()
         .single();
+
       if (error) throw error;
       return data.id;
     };
 
-    // Simulate payment process
     const paymentResult = await simulatePaymentProcess();
+
     if (paymentResult.success) {
       const orderId = await createOrder();
+
       setIsProcessing(false);
       toast({
         title: "Order placed successfully!",
-        description: "Redirecting you to order tracking...",
-        variant: "success",
+        description: "Redirecting you...",
+        variant: "default",
       });
+
       router.push(`/orders/${orderId}`);
     } else {
       setIsProcessing(false);
       toast({
         title: "Payment failed",
-        description: "Please try again or use a different payment method.",
+        description: "Try again.",
         variant: "destructive",
       });
     }
   };
 
-  const simulatePaymentProcess = async () => {
-    // Simulate a payment success for now
-    return { success: true };
+  const handleContinue = () => {
+    if (validateForm(activeStep)) {
+      if (activeStep === "shipping") setActiveStep("payment");
+      else handleSubmitOrder();
+    }
   };
 
   useEffect(() => {
-    async function loadUserProfile() {
-      if (!user) return;
-      const { data, error } = await supabase
+    if (!user) return;
+    async function loadProfile() {
+      const { data } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
-      if (error) throw error;
-      setFormData((prevData) => ({
-        ...prevData,
-        firstName: data.first_name || "",
-        lastName: data.last_name || "",
-        email: user.email || "",
-        phone: data.phone_number || "",
-        address: data.address || "",
-        city: data.city || "",
-        state: data.state || "",
-        postalCode: data.postal_code || "",
-        country: data.country || "United States",
-      }));
+
+      if (data) {
+        setFormData((prev) => ({
+          ...prev,
+          firstName: data.first_name || "",
+          lastName: data.last_name || "",
+          email: user.email || "",
+          phone: data.phone_number || "",
+          address: data.address || "",
+          city: data.city || "",
+          state: data.state || "",
+          postalCode: data.postal_code || "",
+          country: data.country || "United States",
+        }));
+      }
     }
-    loadUserProfile();
+    loadProfile();
   }, [user, supabase]);
 
   return (

@@ -1,99 +1,43 @@
-// lib/auth.ts
+// lib/auth.ts (NextAuth v5 Compatible)
 
-import { Adapter } from "next-auth/adapters";
-import { User, Session } from "next-auth";
-import { NextAuthOptions } from "next-auth";
-import Providers from "next-auth/providers";
+import type { NextAuthConfig } from "next-auth";
+import EmailProvider from "next-auth/providers/email";
 
-// Mock database call (replace this with your actual DB call)
-const yourDatabaseCallToGetUserById = async (id: string) => {
-  // Simulate a user record
-  return {
-    id,
-    email: "user@example.com",
-    name: "John Doe",
-    role: "admin", // Ensure this field exists
-  };
-};
-
-// Custom Adapter implementation
-const myCustomAdapter: Adapter = {
-  async getUser(id: string): Promise<User | null> {
-    const user = await yourDatabaseCallToGetUserById(id);
-
-    if (user) {
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role || "user", // Ensure 'role' is provided
-      };
-    }
-    return null;
-  },
-
-  // Additional adapter methods like `createUser`, `updateUser`, etc., can be added here if necessary
-  async createUser(user: User) {
-    // Create user logic (e.g., insert into DB)
-    return user;
-  },
-
-  async updateUser(user: User) {
-    // Update user logic
-    return user;
-  },
-
-  async getUserByEmail(email: string) {
-    // Get user by email logic (replace with real DB query)
-    return null; // Mock, adjust to real behavior
-  },
-
-  async getUserByAccount(provider: string, providerAccountId: string) {
-    // Handle provider-based accounts (like OAuth)
-    return null; // Mock, adjust to real behavior
-  },
-
-  // You can define more adapter methods as per your application's requirements
-};
-
-// NextAuth configuration
-export const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthConfig = {
   providers: [
-    Providers.Email({
-      server: process.env.EMAIL_SERVER, // Configure your email provider
-      from: process.env.EMAIL_FROM,
+    EmailProvider({
+      server: process.env.EMAIL_SERVER!,
+      from: process.env.EMAIL_FROM!,
     }),
-    // Add other OAuth providers as necessary (e.g., Google, GitHub)
   ],
 
-  adapter: myCustomAdapter, // Use the custom adapter here
-
   session: {
-    strategy: "jwt", // Use JWT session strategy
+    strategy: "jwt",
   },
 
   callbacks: {
     async jwt({ token, user }) {
+      // When a user first logs in
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.email = user.email;
       }
       return token;
     },
 
     async session({ session, token }) {
-      if (token) {
+      if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        session.user.email = token.email as string;
       }
       return session;
     },
   },
 
   pages: {
-    signIn: "/auth/signin", // Customize the sign-in page as needed
-    error: "/auth/error", // Optional error page
+    signIn: "/auth/signin",
+    error: "/auth/error",
   },
 };
 
-export default myCustomAdapter;
+export default authOptions;
