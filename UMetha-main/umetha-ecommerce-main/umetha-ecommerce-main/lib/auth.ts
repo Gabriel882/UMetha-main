@@ -1,34 +1,31 @@
-// lib/auth.ts (NextAuth v5 Compatible)
+// lib/auth.ts
 
 import type { NextAuthConfig } from "next-auth";
-import EmailProvider from "next-auth/providers/email";
+import Email from "next-auth/providers/email";
 
 export const authOptions: NextAuthConfig = {
   providers: [
-    EmailProvider({
+    Email({
       server: process.env.EMAIL_SERVER!,
       from: process.env.EMAIL_FROM!,
     }),
   ],
 
-  session: {
-    strategy: "jwt",
-  },
+  session: { strategy: "jwt" },
 
   callbacks: {
     async jwt({ token, user }) {
-      // When a user first logs in
       if (user) {
         token.id = user.id;
-        token.email = user.email;
+        token.role = (user as any).role ?? "user";
       }
       return token;
     },
 
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
+      if (token) {
+        (session.user as any).id = token.id as string;
+        (session.user as any).role = token.role as string;
       }
       return session;
     },
@@ -39,5 +36,3 @@ export const authOptions: NextAuthConfig = {
     error: "/auth/error",
   },
 };
-
-export default authOptions;
