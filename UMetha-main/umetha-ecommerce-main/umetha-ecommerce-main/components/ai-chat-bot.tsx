@@ -27,6 +27,7 @@ export default function AiChatBot() {
   const [isTyping, setIsTyping] = useState(false)
   const [messages, setMessages] = useState([
     { 
+      id: `msg-${Date.now()}-0`,
       text: "Hi there! I'm KB, your UMetha shopping assistant. How can I help you find the perfect items today?", 
       isBot: true,
       timestamp: new Date()
@@ -102,7 +103,12 @@ export default function AiChatBot() {
     if (!inputValue.trim()) return
 
     // Add user message
-    const userMessage = { text: inputValue, isBot: false, timestamp: new Date() }
+    const userMessage = { 
+      id: `msg-${Date.now()}-${Math.random()}`,
+      text: inputValue, 
+      isBot: false, 
+      timestamp: new Date() 
+    }
     setMessages(prev => [...prev, userMessage])
     setChatHistory(prev => [...prev, userMessage])
     setInputValue("")
@@ -115,6 +121,7 @@ export default function AiChatBot() {
       
       // Add bot response to messages
       const botResponse = { 
+        id: `msg-${Date.now()}-${Math.random()}`,
         text: aiResponse, 
         isBot: true,
         timestamp: new Date()
@@ -130,6 +137,7 @@ export default function AiChatBot() {
       setMessages(prev => [
         ...prev, 
         { 
+          id: `msg-${Date.now()}-${Math.random()}`,
           text: "Sorry, I'm having trouble connecting. Please try again.", 
           isBot: true, 
           isError: true,
@@ -251,9 +259,9 @@ export default function AiChatBot() {
                 <>
                   <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
                     <AnimatePresence>
-                      {messages.map((message, index) => (
+                      {messages.map((message) => (
                         <motion.div 
-                          key={index} 
+                          key={message.id} 
                           className={cn("flex", message.isBot ? "justify-start" : "justify-end")}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}

@@ -9,7 +9,7 @@ import prisma from "@/lib/prisma";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
@@ -17,6 +17,8 @@ export async function GET(
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+
+    const { id } = await params;
 
     const partner = await prisma.ediPartner.findUnique({
       where: {
@@ -47,7 +49,7 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
@@ -55,6 +57,8 @@ export async function PUT(
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+
+    const { id } = await params;
 
     const data = await req.json();
 
@@ -131,7 +135,7 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
@@ -139,6 +143,8 @@ export async function DELETE(
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
+
+    const { id } = await params;
 
     // Check if partner exists
     const existingPartner = await prisma.ediPartner.findUnique({

@@ -6,6 +6,16 @@ import Tilt from "react-parallax-tilt";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslation } from 'react-i18next';
+// Generate fixed particle positions to avoid hydration mismatch
+const particles = Array.from({ length: 20 }, (_, i) => ({
+  id: i,
+  x: (i * 37 + 23) % 100,
+  y: (i * 53 + 17) % 100,
+  opacity: ((i * 13) % 50 + 20) / 100,
+  duration: ((i * 7) % 10 + 10),
+  delay: ((i * 3) % 50) / 10,
+}));
+
 const getSlides = (t: any) => [
   {
     src: "/fashion-slider.png",
@@ -100,23 +110,23 @@ export default function PromoBanner() {
 
       {/* Animated particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
+        {particles.map((particle) => (
           <motion.div
-            key={i}
+            key={particle.id}
             className="absolute w-2 h-2 rounded-full bg-white/30"
             initial={{
-              x: Math.random() * 100 + "%",
-              y: Math.random() * 100 + "%",
-              opacity: Math.random() * 0.5 + 0.2,
+              x: particle.x + "%",
+              y: particle.y + "%",
+              opacity: particle.opacity,
             }}
             animate={{
               y: [0, -100, 0],
               opacity: [0.3, 0.8, 0.3],
             }}
             transition={{
-              duration: Math.random() * 10 + 10,
+              duration: particle.duration,
               repeat: Infinity,
-              delay: Math.random() * 5,
+              delay: particle.delay,
             }}
           />
         ))}

@@ -31,10 +31,10 @@ const updateProductSchema = z.object({
 // Get single product by ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
 
     const product = await prisma.product.findUnique({
       where: { id },
@@ -57,7 +57,7 @@ export async function GET(
 // Update product by ID (admin only)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check if admin
@@ -66,6 +66,8 @@ export async function PATCH(
     if (!session) {
       return unauthorizedResponse();
     }
+
+    const { id } = await params;
 
     if (session.user.role !== "ADMIN") {
       return forbiddenResponse("Only admins can update products");
@@ -119,7 +121,7 @@ export async function PATCH(
 // Delete product by ID (admin only)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check if admin

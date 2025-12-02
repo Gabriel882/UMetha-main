@@ -24,10 +24,10 @@ const updateCategorySchema = z.object({
 // Get single category by ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id;
+    const { id } = await params;
 
     const category = await prisma.category.findUnique({
       where: { id },
@@ -66,7 +66,7 @@ export async function GET(
 // Update category by ID (admin only)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check if admin
@@ -80,7 +80,7 @@ export async function PATCH(
       return forbiddenResponse("Only admins can update categories");
     }
 
-    const id = params.id;
+    const { id } = await params;
     const body = await req.json();
 
     // Validate request body
@@ -163,7 +163,7 @@ export async function PATCH(
 // Delete category by ID (admin only)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check if admin
@@ -177,7 +177,7 @@ export async function DELETE(
       return forbiddenResponse("Only admins can delete categories");
     }
 
-    const id = params.id;
+    const { id } = await params;
 
     // Check if category exists
     const existingCategory = await prisma.category.findUnique({

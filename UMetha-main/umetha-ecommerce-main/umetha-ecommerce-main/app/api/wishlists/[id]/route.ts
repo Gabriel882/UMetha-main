@@ -19,7 +19,7 @@ const updateWishlistSchema = z.object({
 // Get single wishlist with items
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -27,6 +27,8 @@ export async function GET(
     if (!session) {
       return unauthorizedResponse();
     }
+
+    const { id } = await params;
 
     const userId = session.user.id;
     const id = params.id;
@@ -63,10 +65,12 @@ export async function GET(
 // Update wishlist name
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
+
+    const { id } = await params;
 
     if (!session) {
       return unauthorizedResponse();
@@ -112,7 +116,7 @@ export async function PATCH(
 // Delete wishlist
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

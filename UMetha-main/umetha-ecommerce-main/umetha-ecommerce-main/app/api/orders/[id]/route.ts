@@ -26,7 +26,7 @@ const updateOrderSchema = z.object({
 // Get order by ID
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -80,7 +80,7 @@ export async function GET(
 // Update order status (admin only)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -88,6 +88,8 @@ export async function PATCH(
     if (!session) {
       return unauthorizedResponse();
     }
+
+    const { id } = await params;
 
     const isAdmin = session.user.role === "ADMIN";
 

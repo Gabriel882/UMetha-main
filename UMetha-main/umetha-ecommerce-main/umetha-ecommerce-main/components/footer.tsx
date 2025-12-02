@@ -37,10 +37,12 @@ const FooterLink = ({ href, label }: { href: string; label: string }) => {
 export default function Footer() {
   const [year, setYear] = useState("");
   const [email, setEmail] = useState("");
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     setYear(new Date().getFullYear().toString());
+    setMounted(true);
   }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -71,7 +73,9 @@ export default function Footer() {
                   onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                   className="mx-4 rounded-full border border-indigo-200 dark:border-violet-800/50 bg-white/80 dark:bg-black/20 hover:bg-indigo-50 dark:hover:bg-violet-900/30"
                 >
-                  {theme === "light" ? (
+                  {!mounted ? (
+                    <Sun size={18} className="text-indigo-600" />
+                  ) : theme === "light" ? (
                     <Moon size={18} className="text-indigo-600" />
                   ) : (
                     <Sun size={18} className="text-violet-400" />
