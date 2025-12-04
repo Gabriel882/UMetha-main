@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd UMetha-main/umetha-ecommerce-main/umetha-ecommerce-main && npm run build",
+  "devCommand": "cd UMetha-main/umetha-ecommerce-main/umetha-ecommerce-main && npm run dev",
+  "installCommand": "cd UMetha-main/umetha-ecommerce-main/umetha-ecommerce-main && npm install",
+  "framework": "nextjs",
+  "outputDirectory": "UMetha-main/umetha-ecommerce-main/umetha-ecommerce-main/.next"
+}
