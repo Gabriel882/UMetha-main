@@ -98,7 +98,6 @@ export async function PATCH(
       return forbiddenResponse("You are not authorized to update order status");
     }
 
-    const id = params.id;
     const body = await req.json();
 
     // Validate request body

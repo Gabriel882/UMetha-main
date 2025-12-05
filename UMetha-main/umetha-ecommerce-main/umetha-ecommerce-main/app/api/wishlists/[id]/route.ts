@@ -31,7 +31,6 @@ export async function GET(
     const { id } = await params;
 
     const userId = session.user.id;
-    const id = params.id;
 
     const wishlist = await prisma.wishlist.findFirst({
       where: {

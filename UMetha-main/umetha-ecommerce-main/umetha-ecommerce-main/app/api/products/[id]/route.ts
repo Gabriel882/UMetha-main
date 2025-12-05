@@ -73,7 +73,6 @@ export async function PATCH(
       return forbiddenResponse("Only admins can update products");
     }
 
-    const id = params.id;
     const body = await req.json();
 
     // Validate request body
