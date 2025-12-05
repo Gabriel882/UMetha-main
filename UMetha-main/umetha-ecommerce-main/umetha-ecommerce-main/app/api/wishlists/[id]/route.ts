@@ -24,7 +24,7 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    if (!session || !session.user) {
       return unauthorizedResponse();
     }
 
@@ -71,7 +71,7 @@ export async function PATCH(
 
     const { id } = await params;
 
-    if (!session) {
+    if (!session || !session.user) {
       return unauthorizedResponse();
     }
 
@@ -119,7 +119,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    if (!session || !session.user) {
       return unauthorizedResponse();
     }
 

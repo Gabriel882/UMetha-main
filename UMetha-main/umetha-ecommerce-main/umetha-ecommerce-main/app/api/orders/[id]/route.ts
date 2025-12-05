@@ -31,7 +31,7 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    if (!session || !session.user) {
       return unauthorizedResponse();
     }
 
@@ -85,7 +85,7 @@ export async function PATCH(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
+    if (!session || !session.user) {
       return unauthorizedResponse();
     }
 
