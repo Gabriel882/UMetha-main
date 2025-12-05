@@ -22,7 +22,7 @@ export async function GET(
 
     const partner = await prisma.ediPartner.findUnique({
       where: {
-        id: params.id,
+        id,
       },
     });
 
