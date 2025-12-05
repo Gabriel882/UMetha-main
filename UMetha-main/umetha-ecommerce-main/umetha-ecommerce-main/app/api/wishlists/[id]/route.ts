@@ -76,7 +76,6 @@ export async function PATCH(
     }
 
     const userId = session.user.id;
-    const id = params.id;
     const body = await req.json();
 
     // Validate request body
@@ -124,8 +123,9 @@ export async function DELETE(
       return unauthorizedResponse();
     }
 
+    const { id } = await params;
+
     const userId = session.user.id;
-    const id = params.id;
 
     // Check if wishlist exists and belongs to user
     const wishlist = await prisma.wishlist.findFirst({
