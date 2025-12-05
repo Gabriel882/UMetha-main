@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           status: 'success',
           data: {
-            categories: categories.map(cat => ({
+            categories: categories.map((cat: any) => ({
               id: cat.id,
               name: cat.name,
               slug: cat.slug
