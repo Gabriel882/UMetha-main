@@ -24,7 +24,7 @@ const addressSchema = z.object({
 // Get user addresses
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 // Create new address
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

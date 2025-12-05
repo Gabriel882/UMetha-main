@@ -19,7 +19,7 @@ const removeCartItemSchema = z.object({
 // Remove item from cart
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

@@ -29,7 +29,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -83,7 +83,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

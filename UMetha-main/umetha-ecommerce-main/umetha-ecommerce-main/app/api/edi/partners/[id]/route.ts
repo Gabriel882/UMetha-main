@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
@@ -53,7 +53,7 @@ export async function PUT(
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
@@ -139,7 +139,7 @@ export async function DELETE(
 ) {
   try {
     // Check authentication - only admins should be able to manage partners
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }

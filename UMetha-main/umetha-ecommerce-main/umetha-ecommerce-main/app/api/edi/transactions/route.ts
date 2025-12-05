@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma"; // Fixed prisma import
 export async function GET(req: NextRequest) {
   try {
     // Check authentication - only admins should be able to view EDI transactions
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }

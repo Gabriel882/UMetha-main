@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
+import { getServerSession, Session } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import {
   successResponse,
@@ -28,7 +28,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -61,7 +61,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -124,7 +124,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

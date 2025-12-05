@@ -11,7 +11,7 @@ import ediService from "@/lib/edi-service";
 export async function POST(req: NextRequest) {
   try {
     // Check authentication - only admins should be able to send EDI documents
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }

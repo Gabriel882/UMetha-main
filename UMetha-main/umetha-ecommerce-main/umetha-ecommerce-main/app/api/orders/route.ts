@@ -20,7 +20,7 @@ const createOrderSchema = z.object({
 // Get user orders
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
 // Create new order from cart
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

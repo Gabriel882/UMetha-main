@@ -61,7 +61,7 @@ export async function PATCH(
 ) {
   try {
     // Check if admin
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
@@ -124,7 +124,7 @@ export async function DELETE(
 ) {
   try {
     // Check if admin
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

@@ -55,7 +55,7 @@ const addToCartSchema = z.object({
 // Add item to cart
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();

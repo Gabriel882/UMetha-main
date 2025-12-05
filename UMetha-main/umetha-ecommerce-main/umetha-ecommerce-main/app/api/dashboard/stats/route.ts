@@ -12,7 +12,7 @@ import { authOptions } from "@/lib/auth";
 // Get dashboard statistics (admin only)
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = (await getServerSession(authOptions)) as any;
 
     if (!session || !session.user) {
       return unauthorizedResponse();
