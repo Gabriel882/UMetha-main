@@ -89,11 +89,17 @@ export const db = {
 
   searchProducts: async (query: string, language = "en") => {
     const searchPatterns = buildSearchPatterns(query);
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .or(searchPatterns.join(','))
-      .order("name", { ascending: true });
+    let queryBuilder = supabase.from("products").select("*");
+
+    if (searchPatterns.length > 0) {
+      queryBuilder = queryBuilder.or(searchPatterns.join(","));
+    }
+
+    if (language) {
+      queryBuilder = queryBuilder.eq("language", language);
+    }
+
+    const { data, error } = await queryBuilder.order("name", { ascending: true });
 
     if (error) throw new Error(error.message);
     return data;
@@ -135,6 +141,10 @@ export const db = {
     if (minPrice !== undefined) queryBuilder = queryBuilder.gte("price", minPrice);
     if (maxPrice !== undefined) queryBuilder = queryBuilder.lte("price", maxPrice);
 
+    if (language) {
+      queryBuilder = queryBuilder.eq("language", language);
+    }
+
     // Sorting
     const sortField = sortBy === "price" ? "price" :
                      sortBy === "date_created" ? "date_created" : "name";
@@ -159,12 +169,12 @@ export const db = {
   },
 
   // Generic CRUD operations
-  create: async (table: string, data: any) => {
+  create: async (table: string, data: Record<string, unknown>) => {
     const { data: insertedData, error } = await supabase.from(table).insert(data).select();
     if (error) throw new Error(error.message);
     return insertedData;
   },
-  update: async (table: string, id: string, data: any, idField = "products_id") => {
+  update: async (table: string, id: string, data: Record<string, unknown>, idField = "products_id") => {
     const { data: updatedData, error } = await supabase.from(table).update(data).eq(idField, id).select();
     if (error) throw new Error(error.message);
     return updatedData;

@@ -2,6 +2,92 @@ import axios, { AxiosInstance } from "axios";
 import { ediConfig } from "./edi-config";
 import { prisma } from "./prisma";
 
+type NormalizedEdiError = {
+  message: string;
+  responseData?: unknown;
+};
+
+const normalizeEdiError = (error: unknown): NormalizedEdiError => {
+  if (axios.isAxiosError(error)) {
+    return {
+      message: error.message,
+      responseData: error.response?.data,
+    };
+  }
+  if (error instanceof Error) {
+    return { message: error.message };
+  }
+  return { message: String(error) };
+};
+
+interface PurchaseOrderItem {
+  sku: string;
+  quantity: number;
+  upc?: string | null;
+  price: number;
+  name?: string;
+}
+
+interface PurchaseOrderData {
+  id: string;
+  orderNumber: string;
+  supplierId: string;
+  createdAt: string;
+  items: PurchaseOrderItem[];
+  shippingAddress?: Record<string, unknown>;
+  billingAddress?: Record<string, unknown>;
+}
+
+interface InventoryUpdateItem {
+  sku: string;
+  quantityAvailable: number;
+}
+
+interface InventoryUpdate {
+  partnerId: string;
+  referenceId: string;
+  items?: InventoryUpdateItem[];
+}
+
+interface OrderConfirmation {
+  partnerId: string;
+  referenceId: string;
+  poNumber: string;
+  status: string;
+}
+
+interface ShippingNotice {
+  partnerId: string;
+  referenceId: string;
+  poNumber: string;
+  shipDate?: string;
+  trackingNumber?: string;
+  carrier?: string;
+}
+
+interface InvoiceDocument {
+  partnerId: string;
+  referenceId: string;
+  poNumber: string;
+  invoiceNumber: string;
+  totalAmount: number;
+  currency?: string;
+  dueDate: string;
+  invoiceDate: string;
+}
+
+interface PaymentAdviceData {
+  orderId?: string;
+  orderNumber: string;
+  supplierId: string;
+  paymentId: string;
+  invoiceNumber: string;
+  paymentDate?: string;
+  amount: number;
+  currency?: string;
+  paymentMethod: string;
+}
+
 /**
  * EDI Service for interacting with EDI provider APIs
  * Handles sending and receiving EDI documents
@@ -25,7 +111,7 @@ export class EDIService {
   /**
    * Send a purchase order (EDI 850) to a supplier
    */
-  async sendPurchaseOrder(orderData: any) {
+  async sendPurchaseOrder(orderData: PurchaseOrderData) {
     try {
       console.log(
         `Sending purchase order ${orderData.orderNumber} to supplier ${orderData.supplierId}`
@@ -36,7 +122,7 @@ export class EDIService {
         purchaseOrder: {
           poNumber: orderData.orderNumber,
           orderDate: orderData.createdAt,
-          items: orderData.items.map((item: any) => ({
+          items: orderData.items.map((item: PurchaseOrderItem) => ({
             sku: item.sku,
             quantity: item.quantity,
             upc: item.upc || null,
@@ -64,11 +150,9 @@ export class EDIService {
         referenceId: response.data.referenceId,
         status: response.data.status,
       };
-    } catch (error: any) {
-      console.error(
-        "EDI Purchase Order send error:",
-        error.response?.data || error.message
-      );
+    } catch (error: unknown) {
+      const { message, responseData } = normalizeEdiError(error);
+      console.error("EDI Purchase Order send error:", responseData ?? message);
 
       // Log the failed EDI transmission
       await this.logEdiTransaction({
@@ -77,13 +161,13 @@ export class EDIService {
         partnerId: orderData.supplierId,
         status: "failed",
         orderId: orderData.id,
-        errorMessage: error.message,
-        rawData: JSON.stringify(error.response?.data || {}),
+        errorMessage: message,
+        rawData: JSON.stringify(responseData ?? {}),
       });
 
       return {
         success: false,
-        error: error.response?.data || error.message,
+        error: responseData ?? message,
       };
     }
   }
@@ -104,11 +188,12 @@ export class EDIService {
         success: true,
         updatesProcessed: response.data.inventoryUpdates?.length || 0,
       };
-    } catch (error: any) {
-      console.error("Error checking inventory updates:", error.message);
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
+      console.error("Error checking inventory updates:", message);
       return {
         success: false,
-        error: error.message,
+        error: message,
       };
     }
   }
@@ -116,7 +201,7 @@ export class EDIService {
   /**
    * Process a single inventory update
    */
-  private async processInventoryUpdate(update: any) {
+  private async processInventoryUpdate(update: InventoryUpdate) {
     try {
       // Log the received inventory update
       await this.logEdiTransaction({
@@ -157,10 +242,11 @@ export class EDIService {
         status: "processed",
         rawData: JSON.stringify(update),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
       console.error(
         `Error processing inventory update ${update.referenceId}:`,
-        error.message
+        message
       );
 
       // Update the transaction status
@@ -170,7 +256,7 @@ export class EDIService {
         partnerId: update.partnerId,
         referenceId: update.referenceId,
         status: "error",
-        errorMessage: error.message,
+        errorMessage: message,
       });
     }
   }
@@ -191,11 +277,12 @@ export class EDIService {
         success: true,
         confirmationsProcessed: response.data.orderConfirmations?.length || 0,
       };
-    } catch (error: any) {
-      console.error("Error retrieving order confirmations:", error.message);
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
+      console.error("Error retrieving order confirmations:", message);
       return {
         success: false,
-        error: error.message,
+        error: message,
       };
     }
   }
@@ -203,7 +290,7 @@ export class EDIService {
   /**
    * Process a single order confirmation
    */
-  private async processOrderConfirmation(confirmation: any) {
+  private async processOrderConfirmation(confirmation: OrderConfirmation) {
     try {
       // Find the order in our database
       const order = await prisma.order.findFirst({
@@ -272,10 +359,11 @@ export class EDIService {
         orderId: order.id,
         rawData: JSON.stringify(confirmation),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
       console.error(
         `Error processing order confirmation ${confirmation.referenceId}:`,
-        error.message
+        message
       );
 
       // Update the transaction status
@@ -285,7 +373,7 @@ export class EDIService {
         partnerId: confirmation.partnerId,
         referenceId: confirmation.referenceId,
         status: "error",
-        errorMessage: error.message,
+        errorMessage: message,
       });
     }
   }
@@ -306,11 +394,12 @@ export class EDIService {
         success: true,
         noticesProcessed: response.data.shippingNotices?.length || 0,
       };
-    } catch (error: any) {
-      console.error("Error retrieving shipping notices:", error.message);
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
+      console.error("Error retrieving shipping notices:", message);
       return {
         success: false,
-        error: error.message,
+        error: message,
       };
     }
   }
@@ -318,7 +407,7 @@ export class EDIService {
   /**
    * Process a single shipping notice
    */
-  private async processShippingNotice(notice: any) {
+  private async processShippingNotice(notice: ShippingNotice) {
     try {
       // Find the order in our database
       const order = await prisma.order.findFirst({
@@ -383,10 +472,11 @@ export class EDIService {
         orderId: order.id,
         rawData: JSON.stringify(notice),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
       console.error(
         `Error processing shipping notice ${notice.referenceId}:`,
-        error.message
+        message
       );
 
       // Update the transaction status
@@ -396,7 +486,7 @@ export class EDIService {
         partnerId: notice.partnerId,
         referenceId: notice.referenceId,
         status: "error",
-        errorMessage: error.message,
+        errorMessage: message,
       });
     }
   }
@@ -417,11 +507,12 @@ export class EDIService {
         success: true,
         invoicesProcessed: response.data.invoices?.length || 0,
       };
-    } catch (error: any) {
-      console.error("Error retrieving invoices:", error.message);
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
+      console.error("Error retrieving invoices:", message);
       return {
         success: false,
-        error: error.message,
+        error: message,
       };
     }
   }
@@ -429,7 +520,7 @@ export class EDIService {
   /**
    * Process a single invoice
    */
-  private async processInvoice(invoice: any) {
+  private async processInvoice(invoice: InvoiceDocument) {
     try {
       // Find the order in our database
       const order = await prisma.order.findFirst({
@@ -503,10 +594,11 @@ export class EDIService {
         orderId: order.id,
         rawData: JSON.stringify(invoice),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
       console.error(
         `Error processing invoice ${invoice.referenceId}:`,
-        error.message
+        message
       );
 
       // Update the transaction status
@@ -516,7 +608,7 @@ export class EDIService {
         partnerId: invoice.partnerId,
         referenceId: invoice.referenceId,
         status: "error",
-        errorMessage: error.message,
+        errorMessage: message,
       });
     }
   }
@@ -524,7 +616,7 @@ export class EDIService {
   /**
    * Send payment advice (EDI 820)
    */
-  async sendPaymentAdvice(paymentData: any) {
+  async sendPaymentAdvice(paymentData: PaymentAdviceData) {
     try {
       console.log(
         `Sending payment advice for order ${paymentData.orderNumber} to supplier ${paymentData.supplierId}`
@@ -559,10 +651,11 @@ export class EDIService {
         referenceId: response.data.referenceId,
         status: response.data.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const { message, responseData } = normalizeEdiError(error);
       console.error(
         "EDI Payment Advice send error:",
-        error.response?.data || error.message
+        responseData ?? message
       );
 
       // Log the failed EDI transmission
@@ -572,13 +665,13 @@ export class EDIService {
         partnerId: paymentData.supplierId,
         status: "failed",
         orderId: paymentData.orderId,
-        errorMessage: error.message,
-        rawData: JSON.stringify(error.response?.data || {}),
+        errorMessage: message,
+        rawData: JSON.stringify(responseData ?? {}),
       });
 
       return {
         success: false,
-        error: error.response?.data || error.message,
+        error: responseData ?? message,
       };
     }
   }
@@ -624,8 +717,9 @@ export class EDIService {
           rawData: transactionData.rawData,
         },
       });
-    } catch (error: any) {
-      console.error("Error logging EDI transaction:", error.message);
+    } catch (error: unknown) {
+      const { message } = normalizeEdiError(error);
+      console.error("Error logging EDI transaction:", message);
     }
   }
 }
