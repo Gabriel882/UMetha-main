@@ -59,20 +59,28 @@ const steps = [
   },
 ];
 
-export default function OrderTrackingPage({ params }: { params: { orderId: string } }) {
+export default function OrderTrackingPage({ params }: { params: Promise<{ orderId: string }> }) {
   const [order, setOrder] = useState(null);
+  const [resolvedParams, setResolvedParams] = useState<{ orderId: string } | null>(null);
+
+  // Resolve params first
+  useEffect(() => {
+    params.then(setResolvedParams);
+  }, [params]);
 
   // Fetching order data on the client side (useEffect)
   useEffect(() => {
+    if (!resolvedParams) return;
+    
     async function fetchOrder() {
-      const res = await fetch(`/api/orders/${params.orderId}`);
+      const res = await fetch(`/api/orders/${resolvedParams.orderId}`);
       const data = await res.json();
       setOrder(data);
     }
     fetchOrder();
-  }, [params.orderId]);
+  }, [resolvedParams]);
 
-  if (!order) {
+  if (!order || !resolvedParams) {
     return <div>Loading...</div>;
   }
 
@@ -88,7 +96,7 @@ export default function OrderTrackingPage({ params }: { params: { orderId: strin
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Order #{params.orderId}
+                Order #{resolvedParams.orderId}
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 4 items • Total $458.95
