@@ -9,7 +9,7 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // Schema for adding item to wishlist
 const addItemSchema = z.object({

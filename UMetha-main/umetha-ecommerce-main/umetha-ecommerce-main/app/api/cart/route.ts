@@ -7,7 +7,7 @@ import {
   unauthorizedResponse,
   serverErrorResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 /**
  * Cart API - Get User's Shopping Cart

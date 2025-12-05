@@ -9,7 +9,7 @@ import {
   serverErrorResponse,
   unauthorizedResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 /**
  * Add to Cart API

@@ -80,10 +80,11 @@ interface InfluencerProfile {
   };
 }
 
-export default function InfluencerStorePage({ params }: { params: { id: string } }) {
+export default function InfluencerStorePage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
   const { addItem } = useCart();
   const router = useRouter();
+  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(null);
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [influencer, setInfluencer] = useState<InfluencerProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,10 +110,12 @@ export default function InfluencerStorePage({ params }: { params: { id: string }
 
   // Fetch influencer profile and products
   const fetchData = async () => {
+    if (!resolvedParams) return;
+    
     setLoading(true);
     try {
       // Fetch influencer profile
-      const profileResponse = await fetch(`/api/influencer/${params.id}`);
+      const profileResponse = await fetch(`/api/influencer/${resolvedParams.id}`);
       const profileData = await profileResponse.json();
       
       if (profileResponse.ok) {
@@ -120,7 +123,7 @@ export default function InfluencerStorePage({ params }: { params: { id: string }
       }
 
       // Fetch products
-      const productsResponse = await fetch(`/api/influencer-products?influencerId=${params.id}&status=active`);
+      const productsResponse = await fetch(`/api/influencer-products?influencerId=${resolvedParams.id}&status=active`);
       const productsData = await productsResponse.json();
       
       if (productsResponse.ok) {
@@ -137,8 +140,12 @@ export default function InfluencerStorePage({ params }: { params: { id: string }
   };
 
   useEffect(() => {
+    params.then(setResolvedParams);
+  }, [params]);
+
+  useEffect(() => {
     fetchData();
-  }, [params.id]);
+  }, [resolvedParams]);
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

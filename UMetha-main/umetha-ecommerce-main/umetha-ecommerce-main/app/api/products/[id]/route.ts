@@ -10,7 +10,7 @@ import {
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // Update product schema
 const updateProductSchema = z.object({

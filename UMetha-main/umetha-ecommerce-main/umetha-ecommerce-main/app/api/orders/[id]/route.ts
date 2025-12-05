@@ -10,7 +10,7 @@ import {
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // Schema for updating order
 const updateOrderSchema = z.object({

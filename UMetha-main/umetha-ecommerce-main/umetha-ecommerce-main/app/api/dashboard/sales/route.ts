@@ -7,7 +7,7 @@ import {
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/api-utils";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // Get sales data (admin only)
 export async function GET(req: NextRequest) {
