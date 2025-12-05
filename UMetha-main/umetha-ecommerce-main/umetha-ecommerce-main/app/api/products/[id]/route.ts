@@ -134,7 +134,7 @@ export async function DELETE(
       return forbiddenResponse("Only admins can delete products");
     }
 
-    const id = params.id;
+    const { id } = await params;
 
     // Check if product exists
     const existingProduct = await prisma.product.findUnique({

@@ -65,7 +65,7 @@ export async function PUT(
     // Check if partner exists
     const existingPartner = await prisma.ediPartner.findUnique({
       where: {
-        id: params.id,
+        id: id,
       },
     });
 
@@ -82,7 +82,7 @@ export async function PUT(
         where: {
           partnerId: data.partnerId,
           NOT: {
-            id: params.id,
+            id: id,
           },
         },
       });
@@ -98,7 +98,7 @@ export async function PUT(
     // Update the partner
     const updatedPartner = await prisma.ediPartner.update({
       where: {
-        id: params.id,
+        id: id,
       },
       data: {
         name: data.name !== undefined ? data.name : undefined,
@@ -149,7 +149,7 @@ export async function DELETE(
     // Check if partner exists
     const existingPartner = await prisma.ediPartner.findUnique({
       where: {
-        id: params.id,
+        id: id,
       },
     });
 
@@ -171,7 +171,7 @@ export async function DELETE(
       // Instead of deleting, mark as inactive
       await prisma.ediPartner.update({
         where: {
-          id: params.id,
+          id: id,
         },
         data: {
           isActive: false,
@@ -188,7 +188,7 @@ export async function DELETE(
     // Delete the partner if no transactions exist
     await prisma.ediPartner.delete({
       where: {
-        id: params.id,
+        id: id,
       },
     });
 

@@ -37,7 +37,7 @@ export async function GET(
 
     const userId = session.user.id;
     const isAdmin = session.user.role === "ADMIN";
-    const id = params.id;
+    const { id } = await params;
 
     // Build query
     const where: any = { id };

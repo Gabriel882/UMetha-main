@@ -78,7 +78,7 @@ export async function PUT(
     const { data: product, error } = await supabase
       .from('influencer_products')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
